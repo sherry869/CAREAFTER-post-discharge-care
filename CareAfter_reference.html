@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CareAfter</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6efe9;--surface:#fffaf6;--ink:#262a33;--mute:#6f7480;--line:#eadfd6;--mint:#bfead8;--peach:#f9dab8;--lav:#d0c9f6;--pink:#f4bcbc;--red:#d14343;--redbg:#fbe0e0;--green:#23885c;--greenbg:#d9f2e6;--accent:#2f6f62;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1b1f;--surface:#26252b;--ink:#f1ece7;--mute:#a49fa8;--line:#38363d;--mint:#2e5247;--peach:#5b4631;--lav:#423f66;--pink:#68383a;--red:#ff8a8a;--redbg:#4a2527;--green:#6fd3a4;--greenbg:#1f4034;--accent:#8fd3c1;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1c1b1f;--surface:#26252b;--ink:#f1ece7;--mute:#a49fa8;--line:#38363d;--mint:#2e5247;--peach:#5b4631;--lav:#423f66;--pink:#68383a;--red:#ff8a8a;--redbg:#4a2527;--green:#6fd3a4;--greenbg:#1f4034;--accent:#8fd3c1;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3,p{margin:0}
+.hidden{display:none!important}
+/* login */
+.login{min-height:100vh;display:grid;place-items:center;padding:20px}
+.login-card{width:min(400px,100%);background:var(--surface);border-radius:28px;padding:36px 32px;box-shadow:0 20px 50px rgba(80,50,30,.08)}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px}
+.logo i{width:34px;height:34px;border-radius:11px;background:var(--mint);display:grid;place-items:center;font-style:normal;color:var(--accent)}
+.login h1{font-size:30px;margin:26px 0 4px;letter-spacing:-.02em}
+.login p{color:var(--mute);margin-bottom:22px}
+label{display:block;font-weight:500;font-size:13px;margin:0 0 6px;color:var(--mute)}
+input,select,textarea{width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);margin-bottom:14px}
+textarea{resize:vertical;min-height:84px}
+.btn{padding:12px 20px;border-radius:14px;background:var(--ink);color:var(--surface);font-weight:700}
+.btn.full{width:100%}.btn.soft{background:var(--lav);color:var(--ink)}.btn.ghost{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
+.btn.danger{background:var(--redbg);color:var(--red)}.btn.sm{padding:8px 14px;font-size:13px;border-radius:12px}
+/* shell */
+.shell{display:grid;grid-template-columns:76px 1fr 320px;gap:18px;padding:18px;min-height:100vh;max-width:1500px;margin:0 auto}
+.rail{background:var(--surface);border-radius:26px;padding:16px 0;display:flex;flex-direction:column;align-items:center;gap:10px;position:sticky;top:18px;height:calc(100vh - 36px)}
+.rail .logo i{width:40px;height:40px}
+.nav{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:19px;color:var(--mute)}
+.nav.on{background:var(--ink);color:var(--surface)}
+.nav:hover:not(.on){background:var(--bg)}
+.spacer{flex:1}
+main{min-width:0;padding:8px 4px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.top h1{font-size:clamp(28px,4vw,40px);letter-spacing:-.025em;line-height:1.1;max-width:14em}
+.top p{color:var(--mute);margin-top:6px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:22px}
+.stat{border-radius:24px;padding:20px 22px;text-align:left;display:flex;justify-content:space-between;align-items:center;border:2px solid transparent}
+.stat b{font-size:40px;line-height:1;letter-spacing:-.03em;display:block}
+.stat span{font-size:14px}.stat small{display:block;opacity:.75;margin-top:4px}
+.stat.mint{background:var(--mint)}.stat.pink{background:var(--pink)}
+.stat.sel{border-color:var(--ink)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.chip{padding:9px 16px;border-radius:999px;background:var(--surface);font-weight:500;font-size:14px;border:1.5px solid transparent}
+.chip.on{background:var(--ink);color:var(--surface)}
+.depts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-bottom:26px}
+.dept{border-radius:22px;padding:18px;text-align:left;min-height:104px;display:flex;flex-direction:column;justify-content:space-between;color:#262a33}
+.dept.c0{background:var(--mint)}.dept.c1{background:var(--peach)}.dept.c2{background:var(--lav)}.dept.c3{background:var(--pink)}
+:root[data-theme="dark"] .dept,@media (prefers-color-scheme:dark){}
+.dept b{font-size:17px}.dept span{font-size:13px;opacity:.8}
+.sec-h{display:flex;justify-content:space-between;align-items:center;margin:4px 0 12px}
+.sec-h h2{font-size:20px}
+.row{width:100%;display:grid;grid-template-columns:14px 1.4fr 1fr 1fr auto;gap:14px;align-items:center;background:var(--surface);border-radius:20px;padding:14px 18px;margin-bottom:10px;text-align:left;border-left:6px solid var(--green)}
+.row.red{border-left-color:var(--red);background:linear-gradient(90deg,var(--redbg),var(--surface) 55%)}
+.row:hover{transform:translateX(2px)}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--green)}.red .dot{background:var(--red)}
+.row .n{font-weight:700}.row .m{color:var(--mute);font-size:13px}
+.pill{padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;background:var(--greenbg);color:var(--green);white-space:nowrap}
+.pill.red{background:var(--redbg);color:var(--red)}
+.empty{padding:34px;text-align:center;color:var(--mute);background:var(--surface);border-radius:20px}
+/* right panel */
+aside{background:var(--surface);border-radius:26px;padding:22px;position:sticky;top:18px;height:calc(100vh - 36px);overflow:auto}
+.me{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.av{width:46px;height:46px;border-radius:50%;background:var(--lav);display:grid;place-items:center;font-weight:700;flex:none}
+.me b{display:block}.me small{color:var(--mute)}
+aside h3{font-size:16px;margin:18px 0 10px}
+.alert{display:block;width:100%;text-align:left;background:var(--redbg);border-radius:16px;padding:12px 14px;margin-bottom:8px}
+.alert b{display:block;color:var(--red)}.alert small{color:var(--ink)}
+.bars{display:flex;gap:6px;align-items:flex-end;height:90px;margin-top:6px}
+.bars i{flex:1;border-radius:8px;background:var(--lav)}.bars i:last-child{background:var(--ink)}
+.bars-l{display:flex;justify-content:space-between;color:var(--mute);font-size:11px;margin-top:6px}
+/* detail */
+.back{color:var(--mute);font-weight:500;margin-bottom:14px;padding:6px 0}
+.pbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--peach);color:#262a33;border-radius:24px;padding:18px 22px;margin-bottom:18px;cursor:pointer;border-left:8px solid var(--green)}
+.pbar.red{background:var(--pink);border-left-color:var(--red)}
+.pbar .av{background:rgba(255,255,255,.6);width:54px;height:54px}
+.pbar h1{font-size:24px;letter-spacing:-.02em}.pbar small{display:block;opacity:.8}
+.pbar .grow{flex:1;min-width:160px}
+.grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+.card{background:var(--surface);border-radius:24px;padding:20px;margin-bottom:18px}
+.card h2{font-size:18px;margin-bottom:12px}
+.q{margin-bottom:14px}
+.bub{max-width:88%;padding:11px 15px;border-radius:18px;font-size:14.5px}
+.bub.ai{background:var(--lav);color:#262a33;border-bottom-left-radius:5px}
+.bub.pt{background:var(--ink);color:var(--surface);margin-left:auto;border-bottom-right-radius:5px;margin-top:6px;width:fit-content}
+.bub.pt.sev{background:var(--red);color:#fff}
+.bub.wait{background:var(--bg);color:var(--mute);margin-left:auto;margin-top:6px;width:fit-content;border:1.5px dashed var(--line)}
+.tag{font-size:12px;color:var(--mute);margin:0 4px 4px;display:block}
+.sug{background:var(--mint);color:#262a33;border-radius:18px;padding:14px 16px}
+.sug b{display:block;margin-bottom:6px}.sug ul{margin:0;padding-left:18px}
+.opts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.hist{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+.hday{font-weight:700;font-size:13px;margin:12px 0 6px;color:var(--mute)}
+.hline{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.hline .a{font-weight:700;white-space:nowrap}.hline .a.bad{color:var(--red)}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(20,15,10,.45);display:grid;place-items:center;padding:16px;z-index:20}
+.sheet{background:var(--surface);border-radius:28px;padding:26px;width:min(640px,100%);max-height:92vh;overflow:auto}
+.sheet h2{font-size:22px;margin-bottom:4px}.sheet>p{color:var(--mute);margin-bottom:16px}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.fg .w{grid-column:1/-1}
+.tabs{display:flex;gap:6px;background:var(--bg);padding:5px;border-radius:16px;margin-bottom:16px}
+.tabs button{flex:1;padding:10px;border-radius:12px;font-weight:700;color:var(--mute)}
+.tabs button.on{background:var(--surface);color:var(--ink)}
+.drop{display:block;border:2px dashed var(--line);border-radius:18px;padding:18px;text-align:center;margin-bottom:12px;cursor:pointer;background:var(--bg)}
+.drop.ok{border-color:var(--green);background:var(--greenbg)}
+.drop input{display:none}.drop b{display:block}.drop span{color:var(--mute);font-size:13px}
+.acts{display:flex;gap:10px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:12px 20px;border-radius:14px;z-index:30;font-weight:500}
+@media(max-width:1100px){.shell{grid-template-columns:76px 1fr}aside{display:none}}
+@media(max-width:720px){.shell{grid-template-columns:1fr;padding:12px}.rail{flex-direction:row;height:auto;position:static;padding:10px 14px;justify-content:flex-start}.rail .spacer{flex:1}
+.grid2,.fg{grid-template-columns:1fr}.row{grid-template-columns:14px 1fr auto}.row .m2{display:none}.stats{grid-template-columns:1fr 1fr}.stat b{font-size:32px}}
+@media(prefers-reduced-motion:no-preference){.row,.dept,.stat{transition:transform .15s}.dept:hover{transform:translateY(-3px)}}
+</style>
+</head>
+<body>
+
+<section id="login" class="login">
+  <form class="login-card" id="loginForm">
+    <div class="logo"><i>+</i>CareAfter</div>
+    <h1>Sign in</h1>
+    <p>Use the login your hospital was given.</p>
+    <label for="u">Username</label><input id="u" autocomplete="username" value="citygeneral" required>
+    <label for="p">Password</label><input id="p" type="password" autocomplete="current-password" value="demo1234" required>
+    <button class="btn full" type="submit">Sign in</button>
+  </form>
+</section>
+
+<div id="app" class="shell hidden">
+  <nav class="rail" aria-label="Main">
+    <div class="logo"><i>+</i></div>
+    <button class="nav on" data-go="dash" title="Patients" aria-label="Patients">⌂</button>
+    <button class="nav" data-go="add" title="Add patient" aria-label="Add patient">＋</button>
+    <button class="nav" id="flagNav" title="Flagged patients" aria-label="Flagged patients">⚑</button>
+    <div class="spacer"></div>
+    <button class="nav" id="theme" title="Switch theme" aria-label="Switch theme">◐</button>
+    <button class="nav" id="out" title="Sign out" aria-label="Sign out">⏻</button>
+  </nav>
+  <main id="main"></main>
+  <aside id="side"></aside>
+</div>
+<div id="modal" class="modal hidden"></div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const DEPTS=['Cardiology','Pulmonology','Orthopedics','Neurology'];
+const mk=(id,name,age,dept,dx,phone,day,red,meds,hist,risk,today,history,sug)=>({id,name,age,dept,dx,phone,day,red,meds,hist,risk,today,history,sug});
+let P=[
+mk(1,'Meera Nair',72,'Cardiology','Heart failure','+91 98470 11223',4,true,'Furosemide, Carvedilol','Hypertension, diabetes','Age over 70, low sodium diet',
+ [{q:'Is your breathing worse than yesterday?',a:'Severe'},{q:'Did you take your water tablet this morning?',a:'No'},{q:'Any swelling in your feet?',a:'Yes'}],
+ [{d:'Day 3',l:[['Weight up by 1 kg?','Yes'],['Short of breath at rest?','Moderate']]},{d:'Day 2',l:[['Took all medicines?','Yes'],['Any chest pain?','No']]},{d:'Day 1',l:[['How are you feeling?','Moderate']]}],
+ ['Call the patient and the caregiver today','Visit the doctor tomorrow morning','Check blood pressure and weight']),
+mk(2,'Arjun Menon',64,'Cardiology','Heart failure','+91 94470 55120',12,false,'Sacubitril, Spironolactone','Previous MI','Smoker',
+ [{q:'Any breathlessness when walking?',a:'No'},{q:'Did you take all medicines?',a:'Yes'}],
+ [{d:'Day 11',l:[['Swelling in feet?','No'],['Slept well?','Yes']]},{d:'Day 10',l:[['Weight change?','No']]}],
+ ['Keep monitoring, reduce questions to every second day']),
+mk(3,'Fathima Beevi',68,'Pulmonology','COPD flare-up','+91 99950 20871',6,true,'Tiotropium, Prednisolone','Asthma','Lives alone',
+ [{q:'Is your cough producing more phlegm?',a:'Yes'},{q:'Do you have fever?',a:'Moderate'}],
+ [{d:'Day 5',l:[['Using inhaler as advised?','Yes'],['Wheezing?','Moderate']]}],
+ ['Ask about oxygen saturation if a meter is available','Visit the doctor within 24 hours']),
+mk(4,'Thomas Varghese',58,'Orthopedics','Hip replacement','+91 98950 33410',9,false,'Aspirin, Paracetamol','None','Reduced mobility',
+ [{q:'Pain level today?',a:'Moderate'},{q:'Any redness at the wound?',a:'No'}],
+ [{d:'Day 8',l:[['Walked with support?','Yes'],['Wound dry?','Yes']]}],['Continue physiotherapy plan']),
+mk(5,'Lakshmi Pillai',79,'Neurology','Ischemic stroke','+91 94960 70012',15,false,'Clopidogrel, Atorvastatin','Atrial fibrillation','Age over 75',
+ [{q:'Any new weakness or numbness?',a:'No'},{q:'Speech clear today?',a:'Yes'}],
+ [{d:'Day 14',l:[['Headache?','No'],['Took blood thinner?','Yes']]}],['Check blood pressure this week']),
+mk(6,'Rahul Krishnan',49,'Orthopedics','Knee ligament repair','+91 98460 81905',3,false,'Ibuprofen','None','None',
+ [{q:'Pain level today?',a:'Moderate'},{q:'Able to bend the knee?',a:'Yes'}],[{d:'Day 2',l:[['Swelling?','Moderate']]}],['Continue ice and elevation']),
+mk(7,'Sara Joseph',61,'Pulmonology','Pneumonia','+91 99470 66384',8,false,'Amoxicillin','Diabetes','None',
+ [{q:'Is fever gone?',a:'Yes'},{q:'Cough better than yesterday?',a:'Yes'}],[{d:'Day 7',l:[['Fever?','Moderate']]}],['Complete antibiotic course']),
+mk(8,'George Paul',70,'Cardiology','Atrial fibrillation','+91 94000 41276',21,false,'Apixaban, Metoprolol','Hypertension','Missed doses before',
+ [{q:'Any palpitations today?',a:'No'}],[{d:'Day 20',l:[['Dizziness?','No']]}],['Taper to weekly check-ins'])
+];
+let state={view:'dash',dept:'All',flagged:false,id:null,showHist:false};
+let nextId=9;
+
+const bad=a=>['Severe','No-bad'].includes(a);
+const ini=n=>n.split(' ').map(x=>x[0]).join('').slice(0,2);
+const toast=t=>{const e=$('#toast');e.textContent=t;e.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.add('hidden'),2400)};
+const closeModal=()=>$('#modal').classList.add('hidden');
+
+$('#loginForm').onsubmit=e=>{e.preventDefault();$('#login').classList.add('hidden');$('#app').classList.remove('hidden');render()};
+$('#out').onclick=()=>{$('#app').classList.add('hidden');$('#login').classList.remove('hidden')};
+$('#theme').onclick=()=>{const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;r.dataset.theme=dark?'light':'dark'};
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{if(b.dataset.go==='add')return openAdd();state={...state,view:'dash',flagged:false,dept:'All'};render()});
+$('#flagNav').onclick=()=>{state={...state,view:'dash',flagged:true,dept:'All'};render()};
+
+function render(){
+  document.querySelectorAll('.rail .nav[data-go="dash"]').forEach(b=>b.classList.toggle('on',state.view==='dash'&&!state.flagged));
+  $('#flagNav').classList.toggle('on',state.view==='dash'&&state.flagged);
+  state.view==='dash'?dash():detail();side();
+}
+
+function dash(){
+  const flagged=P.filter(p=>p.red).length;
+  const list=P.filter(p=>(state.dept==='All'||p.dept===state.dept)&&(!state.flagged||p.red));
+  $('#main').innerHTML=`
+  <div class="top"><div><h1>Good morning, City General</h1><p>Replies from patients arrive here as they come in.</p></div>
+  <button class="btn" id="addBtn">Add patient</button></div>
+  <div class="stats">
+    <button class="stat mint ${!state.flagged?'sel':''}" id="allStat"><div><span>Total patients</span><b>${P.length}</b><small>Under follow-up</small></div></button>
+    <button class="stat pink ${state.flagged?'sel':''}" id="flagStat"><div><span>Flagged patients</span><b>${flagged}</b><small>Important care needed</small></div></button>
+  </div>
+  <div class="chips">${['All',...DEPTS].map(d=>`<button class="chip ${state.dept===d?'on':''}" data-d="${d}">${d}</button>`).join('')}</div>
+  ${state.dept==='All'&&!state.flagged?`<div class="depts">${DEPTS.map((d,i)=>{const n=P.filter(p=>p.dept===d),r=n.filter(p=>p.red).length;return`<button class="dept c${i}" data-d="${d}"><b>${d}</b><span>${n.length} patients${r?` · ${r} flagged`:''}</span></button>`}).join('')}</div>`:''}
+  <div class="sec-h"><h2>${state.flagged?'Flagged patients':state.dept==='All'?'All patients':state.dept}</h2><span class="pill ${state.flagged?'red':''}">${list.length} shown</span></div>
+  ${list.length?list.map(rowH).join(''):'<div class="empty">No patients here yet. Add a patient to start follow-up.</div>'}`;
+  $('#addBtn').onclick=openAdd;
+  $('#allStat').onclick=()=>{state.flagged=false;render()};
+  $('#flagStat').onclick=()=>{state.flagged=true;state.dept='All';render()};
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{state.dept=b.dataset.d;render()});
+  document.querySelectorAll('.row').forEach(b=>b.onclick=()=>{state={...state,view:'detail',id:+b.dataset.id,showHist:false};render();scrollTo(0,0)});
+}
+const rowH=p=>`<button class="row ${p.red?'red':''}" data-id="${p.id}"><span class="dot"></span>
+ <div><div class="n">${p.name}</div><div class="m">${p.age} yrs · ${p.dx}</div></div>
+ <div class="m m2">${p.dept}</div><div class="m m2">${p.phone}</div>
+ <span class="pill ${p.red?'red':''}">${p.red?'Needs care':'Stable'}</span></button>`;
+
+function detail(){
+  const p=P.find(x=>x.id===state.id);
+  $('#main').innerHTML=`
+  <button class="back" id="back">← All patients</button>
+  <div class="pbar ${p.red?'red':''}" id="nameBar" title="Open details" role="button" tabindex="0">
+    <div class="av">${ini(p.name)}</div>
+    <div class="grow"><h1>${p.name}</h1><small>${p.phone} · ${p.dept} · Day ${p.day} after discharge</small></div>
+    <span class="pill ${p.red?'red':''}">${p.red?'Needs care':'Stable'}</span>
+    <span style="font-size:13px;font-weight:500">View and edit details</span>
+  </div>
+  <div class="grid2"><div>
+    <div class="card"><h2>Today's follow-up</h2>
+    ${p.today.map(t=>`<div class="q"><span class="tag">CareAfter · WhatsApp</span><div class="bub ai">${t.q}</div>
+      ${t.a?`<div class="bub pt ${bad(t.a)?'sev':''}">${t.a}</div>`:`<div class="bub wait">Waiting for reply</div>`}</div>`).join('')}
+    <button class="btn ghost sm" id="histBtn">${state.showHist?'Hide history':'View history'}</button>
+    ${state.showHist?`<div class="hist">${p.history.map(h=>`<div class="hday">${h.d}</div>${h.l.map(x=>`<div class="hline"><span>${x[0]}</span><span class="a ${bad(x[1])?'bad':''}">${x[1]}</span></div>`).join('')}`).join('')||'<p>No earlier answers yet.</p>'}</div>`:''}
+    </div>
+    <div class="card"><h2>Colour status</h2><p style="color:var(--mute);margin-bottom:12px">Set by AI from replies. You can override it.</p>
+      <div class="acts" style="justify-content:flex-start;margin:0"><button class="btn ${p.red?'soft':'danger'} sm" id="flip">${p.red?'Mark as green':'Mark as red'}</button>
+      <button class="btn danger sm" id="del">Remove patient</button></div></div>
+  </div><div>
+    <div class="card"><h2>Ask a question</h2>
+      <label for="cq">Sent to the patient on WhatsApp</label>
+      <textarea id="cq" placeholder="For example: Have you checked your blood pressure today?"></textarea>
+      <div class="opts"><button class="chip" data-o="Yes / No">Yes / No</button><button class="chip" data-o="Moderate / Severe">Moderate / Severe</button></div>
+      <button class="btn full" id="send">Send question</button></div>
+    <div class="sug"><b>AI suggestions</b><ul>${p.sug.map(s=>`<li>${s}</li>`).join('')}</ul></div>
+  </div></div>`;
+  $('#back').onclick=()=>{state.view='dash';render()};
+  $('#nameBar').onclick=()=>openEdit(p);
+  $('#histBtn').onclick=()=>{state.showHist=!state.showHist;detail()};
+  $('#flip').onclick=()=>{p.red=!p.red;toast(p.red?'Marked as red':'Marked as green');render()};
+  $('#del').onclick=()=>{if(confirm('Remove '+p.name+' from CareAfter? Their follow-up will stop.')){P=P.filter(x=>x!==p);state.view='dash';toast('Patient removed');render()}};
+  document.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>b.classList.toggle('on'));
+  $('#send').onclick=()=>{const v=$('#cq').value.trim();if(!v)return toast('Type a question first');
+    const o=[...document.querySelectorAll('[data-o].on')].map(b=>b.dataset.o);
+    p.today.push({q:v+(o.length?' ('+o.join(' or ')+')':''),a:''});toast('Question sent');detail()};
+}
+
+function side(){
+  const fl=P.filter(p=>p.red);
+  $('#side').innerHTML=`<div class="me"><div class="av">CG</div><div><b>City General Hospital</b><small>Signed in as admin</small></div></div>
+  <h3>Needs a call now</h3>
+  ${fl.length?fl.map(p=>`<button class="alert" data-id="${p.id}"><b>${p.name}</b><small>${p.today.find(t=>bad(t.a))?.q||p.dx}</small></button>`).join(''):'<p style="color:var(--mute)">No flagged patients right now.</p>'}
+  <h3>Replies this week</h3><div class="bars">${[42,58,51,66,74,60,82].map(h=>`<i style="height:${h}%"></i>`).join('')}</div>
+  <div class="bars-l"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>`;
+  document.querySelectorAll('.alert').forEach(b=>b.onclick=()=>{state={...state,view:'detail',id:+b.dataset.id,showHist:false};render()});
+}
+
+function fields(p={}){
+  const o=DEPTS.map(d=>`<option ${p.dept===d?'selected':''}>${d}</option>`).join('');
+  return`<div class="fg">
+  <div><label for="f_name">Full name</label><input id="f_name" value="${p.name||''}"></div>
+  <div><label for="f_age">Age</label><input id="f_age" type="number" value="${p.age||''}"></div>
+  <div><label for="f_phone">Contact number</label><input id="f_phone" value="${p.phone||''}" placeholder="+91"></div>
+  <div><label for="f_dept">Department</label><select id="f_dept">${o}</select></div>
+  <div class="w"><label for="f_dx">Diagnosis</label><input id="f_dx" value="${p.dx||''}"></div>
+  <div class="w"><label for="f_meds">Medications</label><input id="f_meds" value="${p.meds||''}"></div>
+  <div><label for="f_hist">Medical history</label><input id="f_hist" value="${p.hist||''}"></div>
+  <div><label for="f_risk">Risk factors</label><input id="f_risk" value="${p.risk||''}"></div></div>`;
+}
+const val=i=>$('#f_'+i).value.trim();
+
+function openEdit(p){
+  const m=$('#modal');m.classList.remove('hidden');
+  m.innerHTML=`<div class="sheet" role="dialog" aria-label="Patient details"><h2>${p.name}</h2><p>Edit the details the AI uses to choose questions.</p>${fields(p)}
+  <div class="acts"><button class="btn ghost" id="x">Cancel</button><button class="btn" id="s">Save changes</button></div></div>`;
+  $('#x').onclick=closeModal;
+  $('#s').onclick=()=>{Object.assign(p,{name:val('name')||p.name,age:+val('age')||p.age,phone:val('phone'),dept:val('dept'),dx:val('dx'),meds:val('meds'),hist:val('hist'),risk:val('risk')});closeModal();toast('Changes saved');render()};
+}
+
+function openAdd(){
+  const m=$('#modal');m.classList.remove('hidden');let tab='manual',filled=null,files={a:0,b:0};
+  const draw=()=>{m.innerHTML=`<div class="sheet" role="dialog" aria-label="Add patient"><h2>Add patient</h2><p>Follow-up questions start on WhatsApp as soon as you save.</p>
+  <div class="tabs"><button class="${tab==='manual'?'on':''}" data-t="manual">Fill in manually</button><button class="${tab==='up'?'on':''}" data-t="up">Upload files</button></div>
+  ${tab==='up'?`<label class="drop ${files.a?'ok':''}"><input type="file" data-f="a"><b>${files.a?'Patient details file added':'Patient details file'}</b><span>Name, age, contact number</span></label>
+  <label class="drop ${files.b?'ok':''}"><input type="file" data-f="b"><b>${files.b?'Medical description file added':'Medical description file'}</b><span>Diagnosis, medicines, history, risks</span></label>
+  ${files.a&&files.b?'<p style="color:var(--green);font-weight:500;margin-bottom:12px">Fields below were filled from your files. Check them before saving.</p>':''}`:''}
+  ${fields(filled||{})}
+  <div class="acts"><button class="btn ghost" id="x">Cancel</button><button class="btn" id="s">Save and start follow-up</button></div></div>`;
+  $('#x').onclick=closeModal;
+  m.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{filled=snap();tab=b.dataset.t;draw()});
+  m.querySelectorAll('[data-f]').forEach(i=>i.onchange=()=>{if(!i.files.length)return;files[i.dataset.f]=1;filled=snap();
+    if(files.a&&files.b)filled={name:'Anil Kumar',age:66,phone:'+91 98470 90021',dept:'Cardiology',dx:'Heart failure',meds:'Furosemide, Ramipril',hist:'Hypertension',risk:'Low sodium diet, lives alone'};
+    draw()});
+  $('#s').onclick=()=>{if(!val('name')||!val('phone'))return toast('Add a name and contact number');
+    P.unshift(mk(nextId++,val('name'),+val('age')||0,val('dept'),val('dx'),val('phone'),0,false,val('meds'),val('hist'),val('risk'),[{q:'Welcome. How are you feeling today?',a:''}],[],['AI will suggest actions after the first replies']));
+    closeModal();toast('Patient added. First question sent');state={...state,view:'dash',dept:'All',flagged:false};render()};};
+  const snap=()=>$('#f_name')?{name:val('name'),age:val('age'),phone:val('phone'),dept:val('dept'),dx:val('dx'),meds:val('meds'),hist:val('hist'),risk:val('risk')}:filled;
+  draw();
+}
+$('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+</script>
+</body>
+</html>
