@@ -1,0 +1,103 @@
+{
+  "chi_bench_samples": [
+    {
+      "index": 1,
+      "task_id": "cm_afib_moderate_anxious_001",
+      "instruction": "",
+      "category": "clinical_bench"
+    },
+    {
+      "index": 2,
+      "task_id": "cm_anorexia_hard_refuses_001",
+      "instruction": "",
+      "category": "clinical_bench"
+    },
+    {
+      "index": 3,
+      "task_id": "cm_asthma_low_coop_001",
+      "instruction": "",
+      "category": "clinical_bench"
+    }
+  ],
+  "ner_symptom_model": {
+    "repo_id": "pmaitra/en_biobert_ner_symptom",
+    "labels": [
+      "SYMPTOMS"
+    ],
+    "spacy_version": ">=3.5.1,<3.6.0",
+    "author": "Sena Chae, Pratik Maitra, Padmini Srinivasan",
+    "license": "MIT"
+  },
+  "triage_routers": {
+    "smolify/smolified-clinical-symptom-router": {
+      "id": "smolify/smolified-clinical-symptom-router",
+      "pipeline_tag": "text-generation",
+      "tags": [
+        "transformers",
+        "safetensors",
+        "gemma3_text",
+        "text-generation",
+        "text-generation-inference"
+      ]
+    },
+    "VolodymyrPugachov/BioClinicalBERT-Triage": {
+      "id": "VolodymyrPugachov/BioClinicalBERT-Triage",
+      "pipeline_tag": "zero-shot-classification",
+      "tags": [
+        "sklearn",
+        "safetensors",
+        "medical,",
+        "triage,",
+        "classification,"
+      ]
+    }
+  },
+  "triage_categories": [
+    {
+      "priority": "HIGH",
+      "code": "RED",
+      "title": "Immediate Care / Urgent Review",
+      "action": "Immediate clinical team call and physician review within 2 hours.",
+      "triggers": [
+        "severe pain",
+        "breathing worse",
+        "chest pain",
+        "fever with confusion",
+        "slurred speech",
+        "wound discharge"
+      ]
+    },
+    {
+      "priority": "MODERATE",
+      "code": "AMBER",
+      "title": "Clinical Attention Needed",
+      "action": "Review in morning rounds; verify medication adherence and schedule tele-check.",
+      "triggers": [
+        "moderate pain",
+        "persistent cough",
+        "missed medication dose",
+        "ankle swelling",
+        "dizziness when standing"
+      ]
+    },
+    {
+      "priority": "ROUTINE",
+      "code": "GREEN",
+      "title": "Stable Recovery",
+      "action": "Continue scheduled remote follow-up check-ins; reinforce lifestyle instructions.",
+      "triggers": [
+        "taking all medicines",
+        "mild discomfort resolving",
+        "vital signs normal",
+        "mobility improving"
+      ]
+    }
+  ],
+  "recovery_dimensions": [
+    "Symptom Severity Trajectory",
+    "Medication Adherence",
+    "Functional Mobility & Pain",
+    "Vital Signs & Fluid Balance",
+    "Red-Flag Complication Absence"
+  ]
+}
