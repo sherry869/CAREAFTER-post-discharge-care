@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DEPARTMENTS } from '../data/mockPatients';
+import { DEPARTMENTS, STATUS_LIST } from '../data/mockPatients';
 
 export default function AddPatientModal({ onClose, onSave }) {
   const [tab, setTab] = useState('manual'); // 'manual' | 'up'
@@ -11,6 +11,7 @@ export default function AddPatientModal({ onClose, onSave }) {
     phone: '+91 ',
     dept: 'Cardiology',
     dx: '',
+    status: 'green',
     meds: '',
     hist: '',
     risk: ''
@@ -216,6 +217,21 @@ export default function AddPatientModal({ onClose, onSave }) {
               >
                 {DEPARTMENTS.map((d) => (
                   <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w">
+              <label htmlFor="f_status">Clinical Triage Flag (Colour Status)</label>
+              <select
+                id="f_status"
+                value={formData.status}
+                onChange={(e) => handleChange('status', e.target.value)}
+              >
+                {STATUS_LIST.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label} ({s.key.toUpperCase()})
+                  </option>
                 ))}
               </select>
             </div>

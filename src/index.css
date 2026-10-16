@@ -25,14 +25,26 @@
   --primary-light: #EFF6FF;
   --hero-navy: #0B132B;
 
-  /* Clean Status Colors */
+  /* 4-Tier Clinical Status Colors */
   --emerald-bg: #ECFDF5;
   --emerald-text: #047857;
   --emerald-border: #A7F3D0;
+  --emerald-solid: #10B981;
+
+  --amber-bg: #FFFBEB;
+  --amber-text: #B45309;
+  --amber-border: #FDE68A;
+  --amber-solid: #F59E0B;
+
+  --blue-bg: #EFF6FF;
+  --blue-text: #1D4ED8;
+  --blue-border: #BFDBFE;
+  --blue-solid: #2563EB;
 
   --rose-bg: #FFF1F2;
   --rose-text: #BE123C;
   --rose-border: #FECDD3;
+  --rose-solid: #F43F5E;
 
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
@@ -56,9 +68,22 @@
   --emerald-bg: rgba(16, 185, 129, 0.15);
   --emerald-text: #34D399;
   --emerald-border: rgba(16, 185, 129, 0.3);
+  --emerald-solid: #10B981;
+
+  --amber-bg: rgba(245, 158, 11, 0.15);
+  --amber-text: #FBBF24;
+  --amber-border: rgba(245, 158, 11, 0.3);
+  --amber-solid: #F59E0B;
+
+  --blue-bg: rgba(37, 99, 235, 0.15);
+  --blue-text: #60A5FA;
+  --blue-border: rgba(37, 99, 235, 0.3);
+  --blue-solid: #38BDF8;
+
   --rose-bg: rgba(244, 63, 94, 0.15);
   --rose-text: #FB7185;
   --rose-border: rgba(244, 63, 94, 0.3);
+  --rose-solid: #F43F5E;
   color-scheme: dark;
 }
 
@@ -312,17 +337,42 @@ main {
   color: var(--primary);
 }
 
-.stat.pink {
-  border-left: 4px solid #E11D48;
+.stat.pink, .stat.red {
+  border-left: 4px solid var(--rose-solid);
 }
 
-.stat.pink b {
-  color: #E11D48;
+.stat.pink b, .stat.red b {
+  color: var(--rose-solid);
+}
+
+.stat.amber {
+  border-left: 4px solid var(--amber-solid);
+}
+
+.stat.amber b {
+  color: var(--amber-solid);
+}
+
+.stat.blue {
+  border-left: 4px solid var(--blue-solid);
+}
+
+.stat.blue b {
+  color: var(--blue-solid);
+}
+
+.stat.green {
+  border-left: 4px solid var(--emerald-solid);
+}
+
+.stat.green b {
+  color: var(--emerald-solid);
 }
 
 .stat.sel {
   border-color: var(--ink);
   background: #FCFDFF;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 
 /* ==============================================================================
@@ -439,8 +489,22 @@ main {
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.row.green {
+  border-left-color: var(--emerald-solid);
+}
+
+.row.amber {
+  border-left-color: var(--amber-solid);
+  background: #FFFDF7;
+}
+
+.row.blue {
+  border-left-color: var(--blue-solid);
+  background: #F8FAFF;
+}
+
 .row.red {
-  border-left-color: #F43F5E;
+  border-left-color: var(--rose-solid);
   background: #FFFDFD;
 }
 
@@ -454,11 +518,24 @@ main {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #10B981;
+  background: var(--emerald-solid);
+  flex-shrink: 0;
+}
+
+.row.green .dot {
+  background: var(--emerald-solid);
+}
+
+.row.amber .dot {
+  background: var(--amber-solid);
+}
+
+.row.blue .dot {
+  background: var(--blue-solid);
 }
 
 .row.red .dot {
-  background: #F43F5E;
+  background: var(--rose-solid);
 }
 
 .row .n {
@@ -473,8 +550,8 @@ main {
   font-weight: 500;
 }
 
-/* Crisp Badge Pills requested by user:
-   bg-emerald-50 text-emerald-700 / bg-rose-50 text-rose-700 */
+/* Crisp Badge Pills for 4-tier clinical triage:
+   Green (Stable), Amber (Under Observation), Blue (Follow-Up Due), Red (Needs Care) */
 .pill {
   padding: 5px 14px;
   border-radius: 999px;
@@ -484,6 +561,27 @@ main {
   color: var(--emerald-text);
   border: 1px solid var(--emerald-border);
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pill.green {
+  background: var(--emerald-bg);
+  color: var(--emerald-text);
+  border: 1px solid var(--emerald-border);
+}
+
+.pill.amber, .pill.yellow {
+  background: var(--amber-bg);
+  color: var(--amber-text);
+  border: 1px solid var(--amber-border);
+}
+
+.pill.blue {
+  background: var(--blue-bg);
+  color: var(--blue-text);
+  border: 1px solid var(--blue-border);
 }
 
 .pill.red {
@@ -751,8 +849,22 @@ aside h3 {
   transition: all 0.2s;
 }
 
+.pbar.green {
+  border-left-color: var(--emerald-solid);
+}
+
+.pbar.amber {
+  border-left-color: var(--amber-solid);
+  background: #FFFDF7;
+}
+
+.pbar.blue {
+  border-left-color: var(--blue-solid);
+  background: #F8FAFF;
+}
+
 .pbar.red {
-  border-left-color: #F43F5E;
+  border-left-color: var(--rose-solid);
   background: #FFFDFD;
 }
 
@@ -1636,8 +1748,21 @@ textarea {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
-.admin-msg-patient-item.flagged {
-  border-left: 4px solid var(--red);
+.admin-msg-patient-item.flagged,
+.admin-msg-patient-item.flagged-red {
+  border-left: 4px solid var(--rose-solid);
+}
+
+.admin-msg-patient-item.flagged-amber {
+  border-left: 4px solid var(--amber-solid);
+}
+
+.admin-msg-patient-item.flagged-blue {
+  border-left: 4px solid var(--blue-solid);
+}
+
+.admin-msg-patient-item.flagged-green {
+  border-left: 4px solid var(--emerald-solid);
 }
 
 .admin-msg-item-top {
@@ -1818,6 +1943,124 @@ textarea {
   }
   .admin-msg-main {
     height: 600px;
+  }
+}
+
+/* ==============================================================================
+   4-Tier Clinical Status Selector & Live Sync Badge
+   ============================================================================== */
+.status-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.status-badge-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.status-badge-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.status-badge-btn.active {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  transform: scale(1.02);
+}
+
+.status-badge-btn.btn-red {
+  background: var(--rose-bg);
+  color: var(--rose-text);
+  border-color: var(--rose-border);
+}
+.status-badge-btn.btn-red.active {
+  border-color: var(--rose-solid);
+  outline: 2px solid var(--rose-solid);
+}
+
+.status-badge-btn.btn-amber {
+  background: var(--amber-bg);
+  color: var(--amber-text);
+  border-color: var(--amber-border);
+}
+.status-badge-btn.btn-amber.active {
+  border-color: var(--amber-solid);
+  outline: 2px solid var(--amber-solid);
+}
+
+.status-badge-btn.btn-blue {
+  background: var(--blue-bg);
+  color: var(--blue-text);
+  border-color: var(--blue-border);
+}
+.status-badge-btn.btn-blue.active {
+  border-color: var(--blue-solid);
+  outline: 2px solid var(--blue-solid);
+}
+
+.status-badge-btn.btn-green {
+  background: var(--emerald-bg);
+  color: var(--emerald-text);
+  border-color: var(--emerald-border);
+}
+.status-badge-btn.btn-green.active {
+  border-color: var(--emerald-solid);
+  outline: 2px solid var(--emerald-solid);
+}
+
+.status-dot-sm {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #ECFDF5;
+  color: #047857;
+  border: 1px solid #A7F3D0;
+}
+
+.live-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulse-green 2s infinite;
+}
+
+@keyframes pulse-green {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
   }
 }
 

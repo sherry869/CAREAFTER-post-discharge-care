@@ -177,7 +177,31 @@ export default function Login({ patients = [], onLogin, onToast }) {
                   setErrorMsg('');
                 }}
               >
-                Patient: Arjun Menon
+                Patient: Arjun Menon (Stable 🟢)
+              </button>
+              <button
+                type="button"
+                className="chip"
+                style={{ fontSize: '11px', padding: '4px 8px' }}
+                onClick={() => {
+                  setIdentifier('98950 33410');
+                  setPassword('');
+                  setErrorMsg('');
+                }}
+              >
+                Patient: Thomas Varghese (Observation 🟠)
+              </button>
+              <button
+                type="button"
+                className="chip"
+                style={{ fontSize: '11px', padding: '4px 8px' }}
+                onClick={() => {
+                  setIdentifier('94960 70012');
+                  setPassword('');
+                  setErrorMsg('');
+                }}
+              >
+                Patient: Lakshmi Pillai (Follow-Up 🔵)
               </button>
             </div>
           </div>

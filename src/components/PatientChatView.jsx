@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { getChatMessages, sendChatMessage, processPatientReplyAI } from '../lib/supabase';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { getChatMessages, sendChatMessage, processPatientReplyAI, subscribeToChatUpdates } from '../lib/supabase';
 
 export default function PatientChatView({ patient, onSignOut, onPatientFlagged }) {
   const [messages, setMessages] = useState([]);
@@ -7,15 +7,42 @@ export default function PatientChatView({ patient, onSignOut, onPatientFlagged }
   const [isThinking, setIsThinking] = useState(false);
   const chatEndRef = useRef(null);
 
-  useEffect(() => {
-    async function load() {
-      if (patient?.id) {
-        const msgs = await getChatMessages(patient.id);
-        setMessages(msgs || []);
-      }
+  const reloadMessages = useCallback(async () => {
+    if (!patient?.id) return;
+    try {
+      const msgs = await getChatMessages(patient.id);
+      setMessages(msgs || []);
+    } catch (err) {
+      console.warn('Failed to load patient chat messages:', err);
     }
-    load();
   }, [patient?.id]);
+
+  // Initial load
+  useEffect(() => {
+    reloadMessages();
+  }, [reloadMessages]);
+
+  // Real-time synchronization (StorageEvent, BroadcastChannel, and Supabase Realtime) + 2.5s Polling
+  useEffect(() => {
+    if (!patient?.id) return;
+
+    // 1. Instant event-driven sync
+    const unsubscribe = subscribeToChatUpdates((data) => {
+      if (!data?.patientId || String(data.patientId) === String(patient.id)) {
+        reloadMessages();
+      }
+    });
+
+    // 2. 2.5-second polling interval for multi-device sync
+    const timer = setInterval(() => {
+      reloadMessages();
+    }, 2500);
+
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+    };
+  }, [patient?.id, reloadMessages]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,7 +57,12 @@ export default function PatientChatView({ patient, onSignOut, onPatientFlagged }
 
     // 1. Send patient message
     const patientMsg = await sendChatMessage(patient.id, 'patient', text);
-    setMessages(prev => [...prev, patientMsg]);
+    if (patientMsg) {
+      setMessages(prev => {
+        if (prev.some(m => m.id === patientMsg.id)) return prev;
+        return [...prev, patientMsg];
+      });
+    }
 
     // 2. AI analyzes reply and formulates adaptive follow-up
     setIsThinking(true);
@@ -56,7 +88,12 @@ export default function PatientChatView({ patient, onSignOut, onPatientFlagged }
         }
       );
 
-      setMessages(prev => [...prev, aiMsg]);
+      if (aiMsg) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === aiMsg.id)) return prev;
+          return [...prev, aiMsg];
+        });
+      }
     } catch (err) {
       console.warn('AI reply error:', err);
       const fallbackMsg = await sendChatMessage(
@@ -65,7 +102,12 @@ export default function PatientChatView({ patient, onSignOut, onPatientFlagged }
         '[Demo Mode] Thank you for your reply. Our care team has recorded your message.',
         { is_demo: true }
       );
-      setMessages(prev => [...prev, fallbackMsg]);
+      if (fallbackMsg) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === fallbackMsg.id)) return prev;
+          return [...prev, fallbackMsg];
+        });
+      }
     } finally {
       setIsThinking(false);
     }
@@ -82,13 +124,18 @@ export default function PatientChatView({ patient, onSignOut, onPatientFlagged }
 
   return (
     <div className="patient-chat-screen">
-      {/* Top Header - Patient Name and Simple Sign-Out */}
+      {/* Top Header - Patient Name and Live Connection Badge */}
       <header className="patient-chat-header">
         <div className="patient-chat-title">
           <div className="patient-avatar-dot"></div>
           <div>
-            <h2>{patient.name}</h2>
-            <small>Post-Discharge Recovery Chat</small>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2>{patient.name}</h2>
+              <span className="live-badge" title="Live connected with City General Care Team">
+                <span className="live-pulse"></span> Connected
+              </span>
+            </div>
+            <small>Post-Discharge Recovery Chat • CareAfter</small>
           </div>
         </div>
         <button

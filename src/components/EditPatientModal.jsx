@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { DEPARTMENTS } from '../data/mockPatients';
+import { DEPARTMENTS, STATUS_LIST, getPatientStatus } from '../data/mockPatients';
 
 export default function EditPatientModal({ patient, onClose, onSave }) {
+  const currentStatus = getPatientStatus(patient);
   const [formData, setFormData] = useState({
     name: patient.name || '',
     age: patient.age || '',
     phone: patient.phone || '',
     dept: patient.dept || 'Cardiology',
     dx: patient.dx || '',
+    status: currentStatus.key || 'green',
     meds: patient.meds || patient.medications || '',
     hist: patient.hist || patient.medical_history || '',
     risk: patient.risk || patient.risk_factors || ''
@@ -26,7 +28,7 @@ export default function EditPatientModal({ patient, onClose, onSave }) {
     <div className="modal" onClick={(e) => e.target.className === 'modal' && onClose()}>
       <div className="sheet" role="dialog" aria-label="Patient details">
         <h2>{patient.name}</h2>
-        <p>Edit the clinical details the AI uses to choose follow-up questions.</p>
+        <p>Edit the clinical details and triage flag used for recovery monitoring.</p>
 
         <form onSubmit={handleSubmit}>
           <div className="fg">
@@ -69,6 +71,21 @@ export default function EditPatientModal({ patient, onClose, onSave }) {
               >
                 {DEPARTMENTS.map((d) => (
                   <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w">
+              <label htmlFor="e_status">Clinical Triage Flag (Colour Status)</label>
+              <select
+                id="e_status"
+                value={formData.status}
+                onChange={(e) => handleChange('status', e.target.value)}
+              >
+                {STATUS_LIST.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label} ({s.key.toUpperCase()})
+                  </option>
                 ))}
               </select>
             </div>

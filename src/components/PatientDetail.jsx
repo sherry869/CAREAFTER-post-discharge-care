@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { getPatientStatus, STATUS_CONFIG, STATUS_LIST } from '../data/mockPatients';
+import { sendChatMessage } from '../lib/supabase';
 
 export default function PatientDetail({
   patient,
   onBack,
   onOpenEdit,
   onToggleFlag,
+  onSetStatus,
   onDelete,
   onAddQuestion,
   onOpenWhatsApp,
@@ -19,6 +22,8 @@ export default function PatientDetail({
 
   if (!patient) return null;
 
+  const status = getPatientStatus(patient);
+
   const isSevere = (ans) => ['Severe', 'No-bad', 'Severe pain', 'Worse'].includes(ans);
 
   const getInitials = (name) => {
@@ -31,7 +36,7 @@ export default function PatientDetail({
     );
   };
 
-  const handleSendQuestion = () => {
+  const handleSendQuestion = async () => {
     const q = customQuestion.trim();
     if (!q) {
       onToast('Type a question first');
@@ -41,10 +46,31 @@ export default function PatientDetail({
       ? `${q} (${selectedOptions.join(' or ')})`
       : q;
 
-    onAddQuestion(patient.id, fullText);
+    // 1. Add to patient follow-up questions
+    if (onAddQuestion) {
+      onAddQuestion(patient.id, fullText);
+    }
+
+    // 2. Also send to unified chat stream so it syncs with patient chat & admin messages
+    try {
+      await sendChatMessage(patient.id, 'hospital', fullText);
+    } catch (err) {
+      console.warn('Failed to dispatch question to chat stream:', err);
+    }
+
     setCustomQuestion('');
     setSelectedOptions([]);
-    onToast('Question added to follow-up');
+    onToast('Question sent via WhatsApp follow-up stream');
+  };
+
+  const handleStatusChange = (statusKey) => {
+    if (onSetStatus) {
+      onSetStatus(patient.id, statusKey);
+    } else if (onToggleFlag) {
+      onToggleFlag(patient.id, statusKey === 'red');
+    }
+    const label = STATUS_CONFIG[statusKey]?.label || statusKey;
+    if (onToast) onToast(`Patient status updated to: ${label}`);
   };
 
   return (
@@ -55,7 +81,7 @@ export default function PatientDetail({
 
       {/* Patient Header Banner */}
       <div
-        className={`pbar ${patient.red || patient.is_flagged ? 'red' : ''}`}
+        className={`pbar ${status.key}`}
         onClick={onOpenEdit}
         role="button"
         tabIndex={0}
@@ -68,8 +94,8 @@ export default function PatientDetail({
             {patient.phone} • {patient.dept} • Day {patient.day_post_discharge || patient.day || 1} after discharge
           </small>
         </div>
-        <span className={`pill ${patient.red || patient.is_flagged ? 'red' : ''}`}>
-          {patient.red || patient.is_flagged ? 'Needs care' : 'Stable'}
+        <span className={`pill ${status.pillClass}`}>
+          {status.label}
         </span>
         <span style={{ fontSize: '13px', fontWeight: 500 }}>
           View and edit details ✎
@@ -159,18 +185,38 @@ export default function PatientDetail({
             )}
           </div>
 
+          {/* 4-Tier Clinical Status Card */}
           <div className="card">
-            <h2>Colour status</h2>
-            <p style={{ color: 'var(--mute)', marginBottom: '12px' }}>
-              Set by AI from replies. Clinicians can manually override it anytime.
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h2 style={{ margin: 0 }}>Colour & Risk Status</h2>
+              <span className={`pill ${status.pillClass}`}>
+                Current: {status.label}
+              </span>
+            </div>
+            <p style={{ color: 'var(--mute)', fontSize: '14px', marginBottom: '12px' }}>
+              Select a flag to set the patient's triage level. This updates across the dashboard and messages instantly.
             </p>
-            <div className="acts" style={{ justifyContent: 'flex-start', margin: 0 }}>
-              <button
-                className={`btn ${patient.red || patient.is_flagged ? 'soft' : 'danger'} sm`}
-                onClick={() => onToggleFlag(patient.id, patient.red || patient.is_flagged)}
-              >
-                {patient.red || patient.is_flagged ? 'Mark as green (Stable)' : 'Mark as red (Needs Care)'}
-              </button>
+
+            <div className="status-selector-grid">
+              {STATUS_LIST.map((s) => {
+                const isActive = status.key === s.key;
+                return (
+                  <button
+                    key={s.key}
+                    type="button"
+                    className={`status-badge-btn btn-${s.key} ${isActive ? 'active' : ''}`}
+                    onClick={() => handleStatusChange(s.key)}
+                    title={s.description}
+                  >
+                    <span className="status-dot-sm" style={{ background: s.color }}></span>
+                    <span style={{ flex: 1 }}>{s.label}</span>
+                    {isActive && <span>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: '18px', paddingTop: '14px', borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 className="btn danger sm"
                 onClick={() => onDelete(patient.id, patient.name)}
@@ -207,7 +253,7 @@ export default function PatientDetail({
             </div>
 
             <button className="btn full" onClick={handleSendQuestion}>
-              Send question
+              Send via WhatsApp to {patient.name}
             </button>
           </div>
 
@@ -221,9 +267,6 @@ export default function PatientDetail({
                 <li key={idx}>{s}</li>
               ))}
             </ul>
-            <div style={{ marginTop: '10px', fontSize: '11.5px', opacity: 0.85, fontStyle: 'italic' }}>
-              Human clinical review required before intervention.
-            </div>
           </div>
         </div>
       </div>

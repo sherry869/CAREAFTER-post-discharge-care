@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { getChatMessages, sendChatMessage } from '../lib/supabase';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { getChatMessages, sendChatMessage, subscribeToChatUpdates } from '../lib/supabase';
 
 export default function WhatsAppSimulator({ patient, onClose, onToast }) {
   const [messages, setMessages] = useState([]);
@@ -7,13 +7,30 @@ export default function WhatsAppSimulator({ patient, onClose, onToast }) {
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef(null);
 
-  useEffect(() => {
-    async function load() {
+  const reloadMessages = useCallback(async () => {
+    if (!patient?.id) return;
+    try {
       const msgs = await getChatMessages(patient.id);
-      setMessages(msgs);
+      setMessages(msgs || []);
+    } catch (err) {
+      console.warn('WhatsApp simulator message load failed:', err);
     }
-    load();
-  }, [patient.id]);
+  }, [patient?.id]);
+
+  useEffect(() => {
+    reloadMessages();
+  }, [reloadMessages]);
+
+  // Live real-time sync
+  useEffect(() => {
+    if (!patient?.id) return;
+    const unsubscribe = subscribeToChatUpdates((data) => {
+      if (!data?.patientId || String(data.patientId) === String(patient.id)) {
+        reloadMessages();
+      }
+    });
+    return () => unsubscribe();
+  }, [patient?.id, reloadMessages]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -25,7 +42,12 @@ export default function WhatsAppSimulator({ patient, onClose, onToast }) {
 
     // Send outgoing message from Hospital / CareAfter
     const newMsg = await sendChatMessage(patient.id, 'hospital', text);
-    setMessages(prev => [...prev, newMsg]);
+    if (newMsg) {
+      setMessages(prev => {
+        if (prev.some(m => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
+    }
     setInputText('');
 
     // Simulate patient auto-reply after 1.5 seconds for an impressive live demo
@@ -42,8 +64,13 @@ export default function WhatsAppSimulator({ patient, onClose, onToast }) {
       }
 
       const patientReply = await sendChatMessage(patient.id, 'patient', replyText);
-      setMessages(prev => [...prev, patientReply]);
-      onToast('Simulated patient reply received');
+      if (patientReply) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === patientReply.id)) return prev;
+          return [...prev, patientReply];
+        });
+      }
+      if (onToast) onToast('Simulated patient reply received');
     }, 1500);
   };
 
@@ -60,8 +87,12 @@ export default function WhatsAppSimulator({ patient, onClose, onToast }) {
 
   const formatTime = (isoString) => {
     if (!isoString) return 'Just now';
-    const date = new Date(isoString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return 'Just now';
+    }
   };
 
   return (

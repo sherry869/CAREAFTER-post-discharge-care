@@ -1,6 +1,72 @@
 // Demo / Fictional Patient Records for CareAfter Hackathon Presentation
 // All records are completely fictional and intended for demonstration purposes only.
 
+export const STATUS_CONFIG = {
+  red: {
+    key: 'red',
+    label: 'Needs Care',
+    pillClass: 'red',
+    color: '#F43F5E',
+    bg: '#FFF1F2',
+    border: '#FECDD3',
+    textColor: '#BE123C',
+    dotColor: '#F43F5E',
+    description: 'Acute or concerning symptoms reported — requires immediate clinical triage'
+  },
+  amber: {
+    key: 'amber',
+    label: 'Under Observation',
+    pillClass: 'amber',
+    color: '#F59E0B',
+    bg: '#FFFBEB',
+    border: '#FDE68A',
+    textColor: '#B45309',
+    dotColor: '#F59E0B',
+    description: 'Mild to moderate symptoms or recent discharge — close daily observation needed'
+  },
+  blue: {
+    key: 'blue',
+    label: 'Follow-Up Due',
+    pillClass: 'blue',
+    color: '#2563EB',
+    bg: '#EFF6FF',
+    border: '#BFDBFE',
+    textColor: '#1D4ED8',
+    dotColor: '#2563EB',
+    description: 'Routine recovery questionnaire, doctor call, or vitals submission scheduled'
+  },
+  green: {
+    key: 'green',
+    label: 'Stable',
+    pillClass: 'green',
+    color: '#10B981',
+    bg: '#ECFDF5',
+    border: '#A7F3D0',
+    textColor: '#047857',
+    dotColor: '#10B981',
+    description: 'Patient reports no concerning symptoms; recovery trajectory progressing as expected'
+  }
+};
+
+export const STATUS_LIST = [
+  STATUS_CONFIG.red,
+  STATUS_CONFIG.amber,
+  STATUS_CONFIG.blue,
+  STATUS_CONFIG.green
+];
+
+export function getPatientStatus(patient) {
+  if (!patient) return STATUS_CONFIG.green;
+  if (patient.status && STATUS_CONFIG[patient.status]) {
+    return STATUS_CONFIG[patient.status];
+  }
+  // Fallback compatibility with boolean flags
+  if (patient.red || patient.is_flagged) {
+    return STATUS_CONFIG.red;
+  }
+  return STATUS_CONFIG.green;
+}
+
 export const INITIAL_PATIENTS = [
   {
     id: 1,
@@ -11,6 +77,7 @@ export const INITIAL_PATIENTS = [
     phone: '+91 98470 11223',
     day_post_discharge: 4,
     day: 4,
+    status: 'red',
     red: true,
     is_flagged: true,
     meds: 'Furosemide, Carvedilol',
@@ -44,6 +111,7 @@ export const INITIAL_PATIENTS = [
     phone: '+91 94470 55120',
     day_post_discharge: 12,
     day: 12,
+    status: 'green',
     red: false,
     is_flagged: false,
     meds: 'Sacubitril, Spironolactone',
@@ -71,6 +139,7 @@ export const INITIAL_PATIENTS = [
     phone: '+91 99950 20871',
     day_post_discharge: 6,
     day: 6,
+    status: 'red',
     red: true,
     is_flagged: true,
     meds: 'Tiotropium, Prednisolone',
@@ -100,8 +169,9 @@ export const INITIAL_PATIENTS = [
     phone: '+91 98950 33410',
     day_post_discharge: 9,
     day: 9,
+    status: 'amber',
     red: false,
-    is_flagged: false,
+    is_flagged: true,
     meds: 'Aspirin, Paracetamol',
     medications: 'Aspirin, Paracetamol',
     hist: 'None',
@@ -126,8 +196,9 @@ export const INITIAL_PATIENTS = [
     phone: '+91 94960 70012',
     day_post_discharge: 15,
     day: 15,
+    status: 'blue',
     red: false,
-    is_flagged: false,
+    is_flagged: true,
     meds: 'Clopidogrel, Atorvastatin',
     medications: 'Clopidogrel, Atorvastatin',
     hist: 'Atrial fibrillation',
@@ -152,8 +223,9 @@ export const INITIAL_PATIENTS = [
     phone: '+91 98460 81905',
     day_post_discharge: 3,
     day: 3,
+    status: 'amber',
     red: false,
-    is_flagged: false,
+    is_flagged: true,
     meds: 'Ibuprofen',
     medications: 'Ibuprofen',
     hist: 'None',
@@ -178,6 +250,7 @@ export const INITIAL_PATIENTS = [
     phone: '+91 99470 66384',
     day_post_discharge: 8,
     day: 8,
+    status: 'green',
     red: false,
     is_flagged: false,
     meds: 'Amoxicillin',
@@ -204,8 +277,9 @@ export const INITIAL_PATIENTS = [
     phone: '+91 94000 41276',
     day_post_discharge: 21,
     day: 21,
+    status: 'blue',
     red: false,
-    is_flagged: false,
+    is_flagged: true,
     meds: 'Apixaban, Metoprolol',
     medications: 'Apixaban, Metoprolol',
     hist: 'Hypertension',

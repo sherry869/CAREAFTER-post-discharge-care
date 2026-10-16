@@ -15,15 +15,102 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-// LocalStorage helpers for fallback / zero-config hackathon demo mode
+// LocalStorage helpers for zero-config hackathon demo mode & fast caching
 const STORAGE_KEY = 'careafter_patients_v1';
 const CHAT_STORAGE_KEY = 'careafter_chats_v1';
+const CHAT_EVENT_NAME = 'careafter_chat_event';
+
+// Cross-tab / cross-window broadcast channel for instant multi-screen sync
+let chatBroadcastChannel = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    chatBroadcastChannel = new BroadcastChannel('careafter_chat_channel');
+  }
+} catch {
+  // BroadcastChannel fallback handled by storage event
+}
+
+export function subscribeToChatUpdates(callback) {
+  if (typeof window === 'undefined') return () => {};
+
+  const handleCustomEvent = (e) => {
+    if (callback) callback(e.detail);
+  };
+
+  const handleStorage = (e) => {
+    if (e.key && e.key.startsWith(CHAT_STORAGE_KEY)) {
+      const patientId = e.key.replace(`${CHAT_STORAGE_KEY}_`, '');
+      if (callback) callback({ patientId, source: 'storage' });
+    }
+  };
+
+  const handleBroadcast = (e) => {
+    if (e.data && callback) callback(e.data);
+  };
+
+  window.addEventListener(CHAT_EVENT_NAME, handleCustomEvent);
+  window.addEventListener('storage', handleStorage);
+  if (chatBroadcastChannel) {
+    chatBroadcastChannel.addEventListener('message', handleBroadcast);
+  }
+
+  // Also subscribe to Supabase Realtime if configured
+  let supabaseChannel = null;
+  if (isSupabaseConfigured && supabase) {
+    try {
+      supabaseChannel = supabase
+        .channel('public:chat_messages')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'chat_messages' },
+          (payload) => {
+            const patientId = payload.new?.patient_id || payload.old?.patient_id;
+            if (callback) callback({ patientId, realtime: true, payload });
+          }
+        )
+        .subscribe();
+    } catch (e) {
+      console.warn('Supabase realtime subscription failed:', e);
+    }
+  }
+
+  return () => {
+    window.removeEventListener(CHAT_EVENT_NAME, handleCustomEvent);
+    window.removeEventListener('storage', handleStorage);
+    if (chatBroadcastChannel) {
+      chatBroadcastChannel.removeEventListener('message', handleBroadcast);
+    }
+    if (supabaseChannel && supabase) {
+      try {
+        supabase.removeChannel(supabaseChannel);
+      } catch {}
+    }
+  };
+}
+
+export function notifyChatUpdate(patientId, newMsg = null) {
+  if (typeof window === 'undefined') return;
+  const detail = { patientId: String(patientId), message: newMsg, timestamp: Date.now() };
+
+  // 1. Dispatch custom event for components in the same window
+  try {
+    window.dispatchEvent(new CustomEvent(CHAT_EVENT_NAME, { detail }));
+  } catch {}
+
+  // 2. BroadcastChannel for other tabs/windows
+  try {
+    if (chatBroadcastChannel) {
+      chatBroadcastChannel.postMessage(detail);
+    }
+  } catch {}
+}
 
 function getLocalPatients() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     } catch {
       // Fallback
     }
@@ -36,19 +123,25 @@ function saveLocalPatients(patients) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
 }
 
-function getLocalChats(patientId) {
-  const saved = localStorage.getItem(`${CHAT_STORAGE_KEY}_${patientId}`);
+function getLocalChats(patientId, allowSeed = true) {
+  const pId = String(patientId);
+  const saved = localStorage.getItem(`${CHAT_STORAGE_KEY}_${pId}`);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
     } catch {
       // Fallback
     }
   }
+
+  if (!allowSeed) return [];
+
   // Default seed messages for demonstration
   const defaultMsgs = [
     {
       id: 1,
+      patient_id: Number(patientId) || 1,
       sender: 'hospital',
       text: 'Good morning! This is CareAfter daily follow-up from City General Hospital. How are you feeling today?',
       created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
@@ -56,18 +149,24 @@ function getLocalChats(patientId) {
     },
     {
       id: 2,
+      patient_id: Number(patientId) || 1,
       sender: 'patient',
       text: 'Good morning nurse. Overall okay, but wanted to confirm about taking my medicines after breakfast.',
       created_at: new Date(Date.now() - 3600000 * 3).toISOString(),
       status: 'read'
     }
   ];
-  localStorage.setItem(`${CHAT_STORAGE_KEY}_${patientId}`, JSON.stringify(defaultMsgs));
+  localStorage.setItem(`${CHAT_STORAGE_KEY}_${pId}`, JSON.stringify(defaultMsgs));
   return defaultMsgs;
 }
 
 function saveLocalChats(patientId, msgs) {
-  localStorage.setItem(`${CHAT_STORAGE_KEY}_${patientId}`, JSON.stringify(msgs));
+  const pId = String(patientId);
+  try {
+    localStorage.setItem(`${CHAT_STORAGE_KEY}_${pId}`, JSON.stringify(msgs));
+  } catch (err) {
+    console.warn('Failed to save chats to localStorage:', err);
+  }
 }
 
 // ==========================================
@@ -86,41 +185,45 @@ export async function getPatients() {
         .order('id', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        // Transform database rows to match app state model
-        return data.map(p => ({
-          id: p.id,
-          name: p.name,
-          age: p.age,
-          dept: p.dept,
-          dx: p.dx,
-          phone: p.phone,
-          day: p.day_post_discharge || 1,
-          day_post_discharge: p.day_post_discharge || 1,
-          red: p.is_flagged,
-          is_flagged: p.is_flagged,
-          meds: p.medications || '',
-          medications: p.medications || '',
-          hist: p.medical_history || '',
-          medical_history: p.medical_history || '',
-          risk: p.risk_factors || '',
-          risk_factors: p.risk_factors || '',
-          today: (p.follow_up_questions || [])
-            .filter(q => q.is_today)
-            .map(q => ({ q: q.question_text, a: q.reply_text || '' })),
-          history: (p.follow_up_questions || [])
-            .filter(q => !q.is_today)
-            .reduce((acc, q) => {
-              const dayKey = `Day ${q.day_number || 1}`;
-              let group = acc.find(g => g.d === dayKey);
-              if (!group) {
-                group = { d: dayKey, l: [] };
-                acc.push(group);
-              }
-              group.l.push([q.question_text, q.reply_text || 'Pending']);
-              return acc;
-            }, []),
-          sug: Array.isArray(p.ai_suggestions) ? p.ai_suggestions : []
-        }));
+        // Transform database rows to match app state model with 4-tier status
+        return data.map(p => {
+          const status = p.status || (p.is_flagged ? 'red' : 'green');
+          return {
+            id: p.id,
+            name: p.name,
+            age: p.age,
+            dept: p.dept,
+            dx: p.dx,
+            phone: p.phone,
+            day: p.day_post_discharge || 1,
+            day_post_discharge: p.day_post_discharge || 1,
+            status,
+            red: status === 'red' || p.is_flagged,
+            is_flagged: status !== 'green' || p.is_flagged,
+            meds: p.medications || '',
+            medications: p.medications || '',
+            hist: p.medical_history || '',
+            medical_history: p.medical_history || '',
+            risk: p.risk_factors || '',
+            risk_factors: p.risk_factors || '',
+            today: (p.follow_up_questions || [])
+              .filter(q => q.is_today)
+              .map(q => ({ q: q.question_text, a: q.reply_text || '' })),
+            history: (p.follow_up_questions || [])
+              .filter(q => !q.is_today)
+              .reduce((acc, q) => {
+                const dayKey = `Day ${q.day_number || 1}`;
+                let group = acc.find(g => g.d === dayKey);
+                if (!group) {
+                  group = { d: dayKey, l: [] };
+                  acc.push(group);
+                }
+                group.l.push([q.question_text, q.reply_text || 'Pending']);
+                return acc;
+              }, []),
+            sug: Array.isArray(p.ai_suggestions) ? p.ai_suggestions : []
+          };
+        });
       }
     } catch (err) {
       console.warn('Supabase fetch failed, falling back to local persistent store:', err);
@@ -131,6 +234,8 @@ export async function getPatients() {
 }
 
 export async function createPatient(patientData) {
+  const initialStatus = patientData.status || (patientData.red ? 'red' : 'green');
+
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase
@@ -143,7 +248,8 @@ export async function createPatient(patientData) {
             dx: patientData.dx,
             phone: patientData.phone,
             day_post_discharge: 1,
-            is_flagged: false,
+            status: initialStatus,
+            is_flagged: initialStatus !== 'green',
             medications: patientData.meds || '',
             medical_history: patientData.hist || '',
             risk_factors: patientData.risk || '',
@@ -179,8 +285,9 @@ export async function createPatient(patientData) {
     id: Date.now(),
     day: 1,
     day_post_discharge: 1,
-    red: false,
-    is_flagged: false,
+    status: initialStatus,
+    red: initialStatus === 'red',
+    is_flagged: initialStatus !== 'green',
     today: [{ q: 'Welcome. How are you feeling today?', a: '' }],
     history: [],
     sug: ['AI will suggest actions after first follow-up reply']
@@ -202,8 +309,15 @@ export async function updatePatient(id, updates) {
       if (updates.meds !== undefined) dbPayload.medications = updates.meds;
       if (updates.hist !== undefined) dbPayload.medical_history = updates.hist;
       if (updates.risk !== undefined) dbPayload.risk_factors = updates.risk;
-      if (updates.red !== undefined) dbPayload.is_flagged = updates.red;
       if (updates.sug !== undefined) dbPayload.ai_suggestions = updates.sug;
+
+      if (updates.status !== undefined) {
+        dbPayload.status = updates.status;
+        dbPayload.is_flagged = updates.status !== 'green';
+      } else if (updates.red !== undefined) {
+        dbPayload.is_flagged = Boolean(updates.red);
+        dbPayload.status = updates.red ? 'red' : 'green';
+      }
 
       const { error } = await supabase
         .from('patients')
@@ -219,7 +333,22 @@ export async function updatePatient(id, updates) {
   }
 
   const current = getLocalPatients();
-  const updated = current.map(p => (p.id === id ? { ...p, ...updates } : p));
+  const updated = current.map(p => {
+    if (p.id === id) {
+      const merged = { ...p, ...updates };
+      if (updates.status !== undefined) {
+        merged.status = updates.status;
+        merged.red = updates.status === 'red';
+        merged.is_flagged = updates.status !== 'green';
+      } else if (updates.red !== undefined && updates.status === undefined) {
+        merged.status = updates.red ? 'red' : 'green';
+        merged.red = Boolean(updates.red);
+        merged.is_flagged = Boolean(updates.red);
+      }
+      return merged;
+    }
+    return p;
+  });
   saveLocalPatients(updated);
   return updated;
 }
@@ -264,10 +393,8 @@ export async function addQuestion(patientId, questionText) {
   const current = getLocalPatients();
   const updated = current.map(p => {
     if (p.id === patientId) {
-      return {
-        ...p,
-        today: [...(p.today || []), { q: questionText, a: '' }]
-      };
+      const newToday = [...(p.today || []), { q: questionText, a: '' }];
+      return { ...p, today: newToday };
     }
     return p;
   });
@@ -276,32 +403,49 @@ export async function addQuestion(patientId, questionText) {
 }
 
 // ==========================================
-// WhatsApp Simulator Chat Messages Service
+// WhatsApp Simulator & Live Chat Messages Service
 // ==========================================
 
 export async function getChatMessages(patientId) {
+  if (!patientId) return [];
+  const pId = String(patientId);
+  const pIdNum = Number(patientId);
+
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase
         .from('chat_messages')
         .select('*')
-        .eq('patient_id', patientId)
+        .eq('patient_id', isNaN(pIdNum) ? pId : pIdNum)
         .order('created_at', { ascending: true });
 
-      if (!error && data && data.length > 0) {
-        return data;
+      if (!error && Array.isArray(data)) {
+        if (data.length > 0) {
+          saveLocalChats(patientId, data);
+          return data;
+        }
+        // If Supabase returned empty array, check if we have newly sent local messages
+        const local = getLocalChats(patientId, false);
+        if (local && local.length > 0) {
+          return local;
+        }
+        return [];
       }
     } catch (err) {
       console.warn('Supabase get chats failed, using local store:', err);
     }
   }
 
-  return getLocalChats(patientId);
+  return getLocalChats(patientId, true);
 }
 
 export async function sendChatMessage(patientId, sender, text, meta = {}) {
+  if (!patientId) return null;
+  const pIdNum = Number(patientId);
+  const validPatientId = !isNaN(pIdNum) ? pIdNum : patientId;
+
   const newMsg = {
-    patient_id: patientId,
+    patient_id: validPatientId,
     sender,
     text,
     is_concerning: Boolean(meta.is_concerning),
@@ -311,27 +455,59 @@ export async function sendChatMessage(patientId, sender, text, meta = {}) {
     created_at: new Date().toISOString()
   };
 
+  // 1. Immediately save to LocalStorage cache so it is instant and survives reloads
+  const current = getLocalChats(patientId, false);
+  const localMsg = { ...newMsg, id: Date.now() };
+  const updated = [...current, localMsg];
+  saveLocalChats(patientId, updated);
+
+  // 2. Broadcast immediately to any other active tabs/components
+  notifyChatUpdate(patientId, localMsg);
+
+  // 3. If Supabase is connected, sync to remote database
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('chat_messages')
         .insert([newMsg])
         .select()
         .single();
 
+      // If insert failed (e.g. table schema in Supabase lacks extra columns), retry with base columns
+      if (error) {
+        console.warn('Full chat_messages insert failed, retrying base schema:', error);
+        const baseMsg = {
+          patient_id: validPatientId,
+          sender,
+          text,
+          status: 'delivered',
+          created_at: newMsg.created_at
+        };
+        const retry = await supabase
+          .from('chat_messages')
+          .insert([baseMsg])
+          .select()
+          .single();
+
+        if (!retry.error && retry.data) {
+          data = retry.data;
+          error = null;
+        }
+      }
+
       if (!error && data) {
-        return data;
+        const syncedMsg = { ...newMsg, ...data };
+        const finalUpdated = updated.map(m => (m.id === localMsg.id ? syncedMsg : m));
+        saveLocalChats(patientId, finalUpdated);
+        notifyChatUpdate(patientId, syncedMsg);
+        return syncedMsg;
       }
     } catch (err) {
-      console.warn('Supabase send chat failed, using local store:', err);
+      console.warn('Supabase send chat failed, local store used:', err);
     }
   }
 
-  const current = getLocalChats(patientId);
-  const updatedMsg = { ...newMsg, id: Date.now() };
-  const updated = [...current, updatedMsg];
-  saveLocalChats(patientId, updated);
-  return updatedMsg;
+  return localMsg;
 }
 
 export async function processPatientReplyAI(patient, text, recentMessages = []) {

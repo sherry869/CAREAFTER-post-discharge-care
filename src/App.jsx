@@ -10,6 +10,7 @@ import EditPatientModal from './components/EditPatientModal';
 import WhatsAppSimulator from './components/WhatsAppSimulator';
 import GeminiModal from './components/GeminiModal';
 import PatientReportModal from './components/PatientReportModal';
+import { STATUS_CONFIG } from './data/mockPatients';
 import {
   isSupabaseConfigured,
   getPatients,
@@ -20,13 +21,38 @@ import {
 } from './lib/supabase';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null); // null | { role: 'admin' } | { role: 'patient', patient: {...} }
+  // Session persistence across page reloads & browser refresh
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('careafter_user_session');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('dash'); // 'dash' | 'detail' | 'messages'
-  const [selectedPatientId, setSelectedPatientId] = useState(null);
+
+  const [view, setView] = useState(() => {
+    try {
+      return localStorage.getItem('careafter_view') || 'dash';
+    } catch {
+      return 'dash';
+    }
+  });
+
+  const [selectedPatientId, setSelectedPatientId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('careafter_selected_patient_id');
+      return saved ? (isNaN(Number(saved)) ? saved : Number(saved)) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [currentDept, setCurrentDept] = useState('All');
-  const [isFlaggedFilter, setIsFlaggedFilter] = useState(false);
+  const [statusFilter, setStatusFilter] = useState(null); // null | 'red' | 'amber' | 'blue' | 'green'
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -37,6 +63,27 @@ export default function App() {
 
   // Toast
   const [toastMessage, setToastMessage] = useState('');
+
+  // Persist auth session on change
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('careafter_user_session', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('careafter_user_session');
+    }
+  }, [currentUser]);
+
+  // Persist current view on change
+  useEffect(() => {
+    localStorage.setItem('careafter_view', view);
+  }, [view]);
+
+  // Persist selected patient on change
+  useEffect(() => {
+    if (selectedPatientId) {
+      localStorage.setItem('careafter_selected_patient_id', String(selectedPatientId));
+    }
+  }, [selectedPatientId]);
 
   // Initial Data Load
   useEffect(() => {
@@ -74,7 +121,7 @@ export default function App() {
     setPatients(updated);
     setShowAddModal(false);
     setView('dash');
-    setIsFlaggedFilter(false);
+    setStatusFilter(null);
     setCurrentDept('All');
     showToast('Patient admitted and follow-up queued');
   };
@@ -86,15 +133,30 @@ export default function App() {
     showToast('Patient details updated');
   };
 
-  const handleToggleFlag = async (id, currentFlag) => {
-    const updated = await updatePatient(id, { red: !currentFlag, is_flagged: !currentFlag });
+  // 4-Tier Status setting
+  const handleSetStatus = async (id, newStatus) => {
+    const updated = await updatePatient(id, {
+      status: newStatus,
+      red: newStatus === 'red',
+      is_flagged: newStatus !== 'green'
+    });
     setPatients(updated);
-    showToast(!currentFlag ? 'Marked as red (Needs Care)' : 'Marked as green (Stable)');
+    const label = STATUS_CONFIG[newStatus]?.label || newStatus;
+    showToast(`Patient status updated: ${label}`);
+  };
+
+  const handleToggleFlag = async (id, currentFlag) => {
+    let nextStatus = 'green';
+    if (typeof currentFlag === 'string') {
+      nextStatus = currentFlag === 'red' ? 'green' : 'red';
+    } else {
+      nextStatus = !currentFlag ? 'red' : 'green';
+    }
+    await handleSetStatus(id, nextStatus);
   };
 
   const handleFlagPatientFromChat = async (patientId, reason) => {
-    const updated = await updatePatient(patientId, { red: true, is_flagged: true });
-    setPatients(updated);
+    await handleSetStatus(patientId, 'red');
     showToast(`⚠️ Patient flagged for clinical review: ${reason}`);
   };
 
@@ -125,13 +187,19 @@ export default function App() {
     return (
       <Login
         patients={patients}
-        onLogin={(user) => setCurrentUser(user)}
+        onLogin={(user) => {
+          setCurrentUser(user);
+          if (user.role === 'patient') {
+            // Patient view defaults to chat
+            setSelectedPatientId(user.patient.id);
+          }
+        }}
         onToast={showToast}
       />
     );
   }
 
-  // 2. Patient Experience — Clean, minimal mobile-friendly chat screen ONLY
+  // 2. Patient Experience — Clean, mobile-friendly chat screen ONLY with persistent session
   if (currentUser.role === 'patient') {
     return (
       <>
@@ -148,16 +216,16 @@ export default function App() {
     );
   }
 
-  // 3. Admin Experience — Preserved dashboard with new Messages section
+  // 3. Admin Experience — Preserved dashboard with live Messages section
   return (
     <>
       <div className="shell">
         <Navbar
           currentView={view}
-          isFlaggedFilter={isFlaggedFilter}
+          isFlaggedFilter={Boolean(statusFilter)}
           onGoHome={() => {
             setView('dash');
-            setIsFlaggedFilter(false);
+            setStatusFilter(null);
             setCurrentDept('All');
           }}
           onOpenMessages={() => {
@@ -166,7 +234,7 @@ export default function App() {
           onOpenAdd={() => setShowAddModal(true)}
           onToggleFlagged={() => {
             setView('dash');
-            setIsFlaggedFilter(prev => !prev);
+            setStatusFilter(prev => (prev ? null : 'red'));
             setCurrentDept('All');
           }}
           onToggleTheme={handleToggleTheme}
@@ -180,14 +248,16 @@ export default function App() {
           <Dashboard
             patients={patients}
             currentDept={currentDept}
-            isFlaggedFilter={isFlaggedFilter}
+            statusFilter={statusFilter}
+            isFlaggedFilter={statusFilter === 'red'}
             onSelectDept={(dept) => {
               setCurrentDept(dept);
-              setIsFlaggedFilter(false);
+            }}
+            onSelectStatusFilter={(statusKey) => {
+              setStatusFilter(statusKey);
             }}
             onToggleFlaggedFilter={(flagged) => {
-              setIsFlaggedFilter(flagged);
-              setCurrentDept('All');
+              setStatusFilter(flagged ? 'red' : null);
             }}
             onSelectPatient={(id) => {
               setSelectedPatientId(id);
@@ -205,6 +275,7 @@ export default function App() {
               onBack={() => setView('dash')}
               onOpenEdit={() => setShowEditModal(true)}
               onToggleFlag={handleToggleFlag}
+              onSetStatus={handleSetStatus}
               onDelete={handleDeletePatient}
               onAddQuestion={handleAddQuestionToPatient}
               onOpenMessages={() => {
@@ -225,6 +296,7 @@ export default function App() {
             selectedPatientId={selectedPatientId}
             onSelectPatient={(id) => setSelectedPatientId(id)}
             onToggleFlag={handleToggleFlag}
+            onSetStatus={handleSetStatus}
             onToast={showToast}
           />
         )}

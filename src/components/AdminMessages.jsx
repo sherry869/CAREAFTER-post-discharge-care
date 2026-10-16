@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { getChatMessages, sendChatMessage } from '../lib/supabase';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { getChatMessages, sendChatMessage, subscribeToChatUpdates } from '../lib/supabase';
+import { getPatientStatus, STATUS_CONFIG, STATUS_LIST } from '../data/mockPatients';
 
 export default function AdminMessages({
   patients = [],
   selectedPatientId,
   onSelectPatient,
   onToggleFlag,
+  onSetStatus,
   onToast
 }) {
   const [activeId, setActiveId] = useState(selectedPatientId || patients[0]?.id);
@@ -24,23 +26,53 @@ export default function AdminMessages({
     }
   }, [selectedPatientId, patients]);
 
-  // Load chat messages whenever activeId changes
-  useEffect(() => {
-    async function fetchMessages() {
-      if (!activeId) return;
-      setLoading(true);
+  // Load chat messages function
+  const reloadMessages = useCallback(async (isSilent = false) => {
+    if (!activeId) return;
+    if (!isSilent) setLoading(true);
+    try {
       const msgs = await getChatMessages(activeId);
       setMessages(msgs || []);
-      setLoading(false);
+    } catch (err) {
+      console.warn('Error loading messages for patient', activeId, err);
+    } finally {
+      if (!isSilent) setLoading(false);
     }
-    fetchMessages();
   }, [activeId]);
+
+  // Initial load when active patient changes
+  useEffect(() => {
+    reloadMessages(false);
+  }, [reloadMessages]);
+
+  // Real-time synchronization via BroadcastChannel, StorageEvent, and Supabase Realtime
+  useEffect(() => {
+    if (!activeId) return;
+
+    // 1. Event-driven instant updates
+    const unsubscribe = subscribeToChatUpdates((data) => {
+      if (!data?.patientId || String(data.patientId) === String(activeId)) {
+        reloadMessages(true);
+      }
+    });
+
+    // 2. Continuous 2.5-second live polling (syncs cross-device & cross-tab)
+    const timer = setInterval(() => {
+      reloadMessages(true);
+    }, 2500);
+
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+    };
+  }, [activeId, reloadMessages]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const activePatient = patients.find(p => p.id === activeId) || patients[0];
+  const activeStatus = getPatientStatus(activePatient);
 
   const handleSendManual = async (e) => {
     e?.preventDefault();
@@ -49,7 +81,13 @@ export default function AdminMessages({
 
     setInputText('');
     const newMsg = await sendChatMessage(activePatient.id, 'hospital', text);
-    setMessages(prev => [...prev, newMsg]);
+    if (newMsg) {
+      setMessages(prev => {
+        // Prevent duplicate appending
+        if (prev.some(m => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
+    }
     if (onToast) onToast(`Message sent to ${activePatient.name}`);
   };
 
@@ -79,6 +117,17 @@ export default function AdminMessages({
     }
   };
 
+  const handleStatusChange = (statusKey) => {
+    if (!activePatient) return;
+    if (onSetStatus) {
+      onSetStatus(activePatient.id, statusKey);
+    } else if (onToggleFlag) {
+      onToggleFlag(activePatient.id, statusKey === 'red');
+    }
+    const label = STATUS_CONFIG[statusKey]?.label || statusKey;
+    if (onToast) onToast(`${activePatient.name} marked as: ${label}`);
+  };
+
   const formatTime = (isoString) => {
     if (!isoString) return '';
     try {
@@ -88,7 +137,6 @@ export default function AdminMessages({
     }
   };
 
-  const isFlagged = activePatient?.red || activePatient?.is_flagged;
   const concerningMessages = messages.filter(m => m.is_concerning);
 
   return (
@@ -97,17 +145,19 @@ export default function AdminMessages({
       <aside className="admin-msg-sidebar">
         <div className="admin-msg-sidebar-header">
           <h3>Patient Conversations</h3>
-          <span className="pill">{patients.length} active</span>
+          <span className="live-badge">
+            <span className="live-pulse"></span> Live
+          </span>
         </div>
 
         <div className="admin-msg-patient-list">
           {patients.map(p => {
-            const flagged = p.red || p.is_flagged;
+            const pStatus = getPatientStatus(p);
             const isSelected = p.id === activePatient?.id;
             return (
               <button
                 key={p.id}
-                className={`admin-msg-patient-item ${isSelected ? 'active' : ''} ${flagged ? 'flagged' : ''}`}
+                className={`admin-msg-patient-item ${isSelected ? 'active' : ''} flagged-${pStatus.key}`}
                 onClick={() => {
                   setActiveId(p.id);
                   if (onSelectPatient) onSelectPatient(p.id);
@@ -115,7 +165,9 @@ export default function AdminMessages({
               >
                 <div className="admin-msg-item-top">
                   <b>{p.name}</b>
-                  {flagged && <span className="pill red">Needs Care</span>}
+                  <span className={`pill ${pStatus.pillClass}`} style={{ fontSize: '11px', padding: '2px 8px' }}>
+                    {pStatus.label}
+                  </span>
                 </div>
                 <div className="admin-msg-item-meta">
                   <span>{p.dx}</span> • <span>Day {p.day_post_discharge || p.day || 1}</span>
@@ -136,25 +188,49 @@ export default function AdminMessages({
             {/* Conversation Header */}
             <div className="admin-msg-header">
               <div className="admin-msg-header-info">
-                <h2>{activePatient.name}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2>{activePatient.name}</h2>
+                  <span className={`pill ${activeStatus.pillClass}`}>
+                    {activeStatus.label}
+                  </span>
+                  <span className="live-badge" title="Live synced across patients and care team">
+                    <span className="live-pulse"></span> Synced
+                  </span>
+                </div>
                 <p>
                   {activePatient.phone} • {activePatient.dept} • {activePatient.dx} (Day {activePatient.day_post_discharge || activePatient.day || 1})
                 </p>
               </div>
 
-              <div className="admin-msg-header-actions">
-                <button
-                  className={`btn sm ${isFlagged ? 'soft' : 'danger'}`}
-                  onClick={() => onToggleFlag && onToggleFlag(activePatient.id, isFlagged)}
-                  title="Toggle patient attention flag"
-                >
-                  {isFlagged ? '✓ Mark as Stable' : '⚑ Flag for Review'}
-                </button>
+              {/* 4-Tier Quick Status Actions */}
+              <div className="admin-msg-header-actions" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {STATUS_LIST.map(s => {
+                  const isActive = activeStatus.key === s.key;
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      className={`btn sm ${isActive ? 'active' : 'ghost'}`}
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        border: `1.5px solid ${s.color}`,
+                        background: isActive ? s.color : 'transparent',
+                        color: isActive ? '#FFFFFF' : s.color
+                      }}
+                      onClick={() => handleStatusChange(s.key)}
+                      title={`Change flag to ${s.label}`}
+                    >
+                      {isActive ? `✓ ${s.label}` : s.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Concerning Responses Alert Banner */}
-            {(isFlagged || concerningMessages.length > 0) && (
+            {(activeStatus.key === 'red' || concerningMessages.length > 0) && (
               <div className="admin-concerning-banner">
                 <span style={{ fontSize: '18px' }}>⚠️</span>
                 <div>
@@ -162,7 +238,7 @@ export default function AdminMessages({
                   <p>
                     {concerningMessages.length > 0
                       ? concerningMessages[concerningMessages.length - 1].concern_reason || 'Patient reported symptoms of concern in chat.'
-                      : 'This patient is currently flagged for clinical review.'}
+                      : 'This patient is currently flagged for urgent clinical care.'}
                   </p>
                 </div>
               </div>
@@ -170,11 +246,11 @@ export default function AdminMessages({
 
             {/* Chat Messages Stream */}
             <div className="admin-msg-stream">
-              {loading ? (
+              {loading && messages.length === 0 ? (
                 <div className="admin-msg-empty">Loading conversation...</div>
               ) : messages.length === 0 ? (
                 <div className="admin-msg-empty">
-                  No messages exchanged yet with {activePatient.name}.
+                  No messages exchanged yet with {activePatient.name}. Send a follow-up check below.
                 </div>
               ) : (
                 messages.map((m, idx) => {
@@ -228,7 +304,7 @@ export default function AdminMessages({
               <form onSubmit={handleSendManual} className="admin-msg-form">
                 <input
                   type="text"
-                  placeholder={`Send manual message to ${activePatient.name}...`}
+                  placeholder={`Send message to ${activePatient.name}...`}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                 />
