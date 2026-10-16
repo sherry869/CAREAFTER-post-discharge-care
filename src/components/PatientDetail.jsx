@@ -8,6 +8,7 @@ export default function PatientDetail({
   onDelete,
   onAddQuestion,
   onOpenWhatsApp,
+  onOpenMessages,
   onOpenGemini,
   onOpenReport,
   onToast
@@ -79,9 +80,18 @@ export default function PatientDetail({
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '18px' }}>
         <button
           className="btn whatsapp-btn sm"
-          onClick={onOpenWhatsApp}
+          onClick={onOpenMessages}
+          title="Open unified patient chat & conversation stream"
         >
-          💬 Send WhatsApp Follow-Up (Simulator)
+          💬 Patient Messages & Chat
+        </button>
+        <button
+          className="btn soft sm"
+          style={{ background: '#E2E8F0', color: '#1E293B', fontWeight: 600 }}
+          onClick={onOpenWhatsApp}
+          title="Open WhatsApp Simulator Modal"
+        >
+          📱 WhatsApp Simulator
         </button>
         <button
           className="btn ai-btn sm"

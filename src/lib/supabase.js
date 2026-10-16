@@ -299,11 +299,14 @@ export async function getChatMessages(patientId) {
   return getLocalChats(patientId);
 }
 
-export async function sendChatMessage(patientId, sender, text) {
+export async function sendChatMessage(patientId, sender, text, meta = {}) {
   const newMsg = {
     patient_id: patientId,
     sender,
     text,
+    is_concerning: Boolean(meta.is_concerning),
+    concern_reason: meta.concern_reason || null,
+    is_demo: Boolean(meta.is_demo),
     status: 'delivered',
     created_at: new Date().toISOString()
   };
@@ -325,7 +328,46 @@ export async function sendChatMessage(patientId, sender, text) {
   }
 
   const current = getLocalChats(patientId);
-  const updated = [...current, { ...newMsg, id: Date.now() }];
+  const updatedMsg = { ...newMsg, id: Date.now() };
+  const updated = [...current, updatedMsg];
   saveLocalChats(patientId, updated);
-  return newMsg;
+  return updatedMsg;
+}
+
+export async function processPatientReplyAI(patient, text, recentMessages = []) {
+  try {
+    const res = await fetch('/api/gemini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'process_patient_reply',
+        patient,
+        patientReply: text,
+        recentMessages: (recentMessages || []).slice(-6)
+      })
+    });
+
+    const json = await res.json();
+    if (res.ok && json.success && json.data) {
+      return json.data;
+    }
+  } catch (err) {
+    console.warn('API call failed, falling back to local clinical evaluation:', err);
+  }
+
+  // Graceful rule-based fallback for demo mode
+  const lower = (text || '').toLowerCase();
+  const urgentKeywords = ['chest pain', 'breath', 'bleeding', 'blood', 'fever', 'swelling', 'severe', 'dizzy', 'vomit', 'worse'];
+  const matched = urgentKeywords.filter(k => lower.includes(k));
+  const isConcerning = matched.length > 0;
+
+  return {
+    is_concerning: isConcerning,
+    concern_reason: isConcerning ? `Reported red-flag symptoms: "${matched.join(', ')}"` : null,
+    ai_response: isConcerning
+      ? `[Demo Mode] I have recorded your symptoms ("${matched.join(', ')}") and alerted your City General care team for review. If you are experiencing sudden severe chest pain, extreme breathlessness, or an emergency, please call 112/911 immediately. Are you resting comfortably right now?`
+      : `[Demo Mode] Thank you for letting us know! Did you take your prescribed morning medications as scheduled?`,
+    flag_patient: isConcerning,
+    is_demo: true
+  };
 }

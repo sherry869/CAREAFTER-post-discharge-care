@@ -3,6 +3,8 @@ import Login from './components/Login';
 import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
 import PatientDetail from './components/PatientDetail';
+import PatientChatView from './components/PatientChatView';
+import AdminMessages from './components/AdminMessages';
 import AddPatientModal from './components/AddPatientModal';
 import EditPatientModal from './components/EditPatientModal';
 import WhatsAppSimulator from './components/WhatsAppSimulator';
@@ -18,10 +20,10 @@ import {
 } from './lib/supabase';
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null); // null | { role: 'admin' } | { role: 'patient', patient: {...} }
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState('dash'); // 'dash' | 'detail'
+  const [view, setView] = useState('dash'); // 'dash' | 'detail' | 'messages'
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [currentDept, setCurrentDept] = useState('All');
   const [isFlaggedFilter, setIsFlaggedFilter] = useState(false);
@@ -42,6 +44,9 @@ export default function App() {
       setLoading(true);
       const data = await getPatients();
       setPatients(data);
+      if (data && data.length > 0 && !selectedPatientId) {
+        setSelectedPatientId(data[0].id);
+      }
       setLoading(false);
     }
     init();
@@ -87,6 +92,12 @@ export default function App() {
     showToast(!currentFlag ? 'Marked as red (Needs Care)' : 'Marked as green (Stable)');
   };
 
+  const handleFlagPatientFromChat = async (patientId, reason) => {
+    const updated = await updatePatient(patientId, { red: true, is_flagged: true });
+    setPatients(updated);
+    showToast(`⚠️ Patient flagged for clinical review: ${reason}`);
+  };
+
   const handleDeletePatient = async (id, name) => {
     if (window.confirm(`Remove ${name} from CareAfter? Their follow-up will stop.`)) {
       const updated = await deletePatient(id);
@@ -107,16 +118,39 @@ export default function App() {
     setPatients(updated);
   };
 
-  const selectedPatient = patients.find(p => p.id === selectedPatientId);
+  const selectedPatient = patients.find(p => p.id === selectedPatientId) || patients[0];
 
-  // If not logged in, show Login Screen
-  if (!isLoggedIn) {
-    return <Login onLogin={() => setIsLoggedIn(true)} onToast={showToast} />;
+  // 1. Shared Login Screen (when not logged in)
+  if (!currentUser) {
+    return (
+      <Login
+        patients={patients}
+        onLogin={(user) => setCurrentUser(user)}
+        onToast={showToast}
+      />
+    );
   }
 
+  // 2. Patient Experience — Clean, minimal mobile-friendly chat screen ONLY
+  if (currentUser.role === 'patient') {
+    return (
+      <>
+        <PatientChatView
+          patient={currentUser.patient}
+          onSignOut={() => {
+            setCurrentUser(null);
+            showToast('Signed out of patient portal');
+          }}
+          onPatientFlagged={handleFlagPatientFromChat}
+        />
+        {toastMessage && <div className="toast">{toastMessage}</div>}
+      </>
+    );
+  }
+
+  // 3. Admin Experience — Preserved dashboard with new Messages section
   return (
     <>
-      {/* Main App Layout */}
       <div className="shell">
         <Navbar
           currentView={view}
@@ -126,6 +160,9 @@ export default function App() {
             setIsFlaggedFilter(false);
             setCurrentDept('All');
           }}
+          onOpenMessages={() => {
+            setView('messages');
+          }}
           onOpenAdd={() => setShowAddModal(true)}
           onToggleFlagged={() => {
             setView('dash');
@@ -134,12 +171,12 @@ export default function App() {
           }}
           onToggleTheme={handleToggleTheme}
           onSignOut={() => {
-            setIsLoggedIn(false);
-            showToast('Signed out');
+            setCurrentUser(null);
+            showToast('Signed out of hospital admin');
           }}
         />
 
-        {view === 'dash' ? (
+        {view === 'dash' && (
           <Dashboard
             patients={patients}
             currentDept={currentDept}
@@ -159,7 +196,9 @@ export default function App() {
             }}
             onOpenAdd={() => setShowAddModal(true)}
           />
-        ) : (
+        )}
+
+        {view === 'detail' && (
           <main>
             <PatientDetail
               patient={selectedPatient}
@@ -168,12 +207,26 @@ export default function App() {
               onToggleFlag={handleToggleFlag}
               onDelete={handleDeletePatient}
               onAddQuestion={handleAddQuestionToPatient}
+              onOpenMessages={() => {
+                setView('messages');
+                window.scrollTo(0, 0);
+              }}
               onOpenWhatsApp={() => setShowWhatsAppModal(true)}
               onOpenGemini={() => setShowGeminiModal(true)}
               onOpenReport={() => setShowReportModal(true)}
               onToast={showToast}
             />
           </main>
+        )}
+
+        {view === 'messages' && (
+          <AdminMessages
+            patients={patients}
+            selectedPatientId={selectedPatientId}
+            onSelectPatient={(id) => setSelectedPatientId(id)}
+            onToggleFlag={handleToggleFlag}
+            onToast={showToast}
+          />
         )}
       </div>
 

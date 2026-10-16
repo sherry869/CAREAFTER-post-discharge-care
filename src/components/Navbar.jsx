@@ -6,6 +6,7 @@ export default function Navbar({
   onGoHome,
   onOpenAdd,
   onToggleFlagged,
+  onOpenMessages,
   onToggleTheme,
   onSignOut
 }) {
@@ -18,10 +19,19 @@ export default function Navbar({
       <button
         className={`nav ${currentView === 'dash' && !isFlaggedFilter ? 'on' : ''}`}
         onClick={onGoHome}
-        title="Patients"
-        aria-label="Patients"
+        title="Patients Dashboard"
+        aria-label="Patients Dashboard"
       >
         ⌂
+      </button>
+
+      <button
+        className={`nav ${currentView === 'messages' ? 'on' : ''}`}
+        onClick={onOpenMessages}
+        title="Patient Messages"
+        aria-label="Patient Messages"
+      >
+        💬
       </button>
 
       <button
