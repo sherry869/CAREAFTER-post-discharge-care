@@ -67,6 +67,113 @@ function getDemoModeResponse(type, patient, patientReply, responses, reason = 'G
     };
   }
 
+  if (type === 'parse_medical_file') {
+    const fileContent = extra.fileContent || '';
+    const fileName = extra.fileName || '';
+    const text = fileContent.toLowerCase();
+    const cleanFileName = fileName
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[_-]/g, ' ')
+      .replace(/discharge|summary|report|note|medical|record|patient/gi, '')
+      .trim();
+
+    // Heuristic department scoring
+    const deptScores = { Cardiology: 0, Pulmonology: 0, Orthopedics: 0, Neurology: 0 };
+    const keywords = {
+      Cardiology: ['heart', 'cardio', 'cardiac', 'failure', 'infarction', 'angina', 'stent', 'bypass', 'furosemide', 'sacubitril', 'carvedilol', 'metoprolol', 'hypertension', 'afib', 'arrhythmia', 'edema', 'troponin'],
+      Pulmonology: ['lung', 'cough', 'copd', 'asthma', 'pneumonia', 'respiratory', 'breathing', 'shortness of breath', 'phlegm', 'inhaler', 'tiotropium', 'prednisolone', 'wheezing', 'oxygen', 'spo2'],
+      Orthopedics: ['bone', 'fracture', 'joint', 'hip', 'knee', 'replacement', 'arthroplasty', 'ligament', 'acl', 'cast', 'crutches', 'paracetamol', 'ibuprofen', 'physiotherapy', 'mobility', 'spine'],
+      Neurology: ['stroke', 'brain', 'neuro', 'ischemic', 'hemorrhage', 'seizure', 'weakness', 'numbness', 'paralysis', 'clopidogrel', 'atorvastatin', 'facial', 'slurred', 'speech', 'headache']
+    };
+    for (const [d, terms] of Object.entries(keywords)) {
+      terms.forEach(t => { if (text.includes(t)) deptScores[d] += 1; });
+    }
+    let detectedDept = 'Cardiology';
+    let maxScore = -1;
+    for (const [d, sc] of Object.entries(deptScores)) {
+      if (sc > maxScore && sc > 0) { maxScore = sc; detectedDept = d; }
+    }
+
+    // Heuristic name extraction
+    let extractedName = '';
+    const nameMatch = fileContent.match(/(?:patient(?:\s*name)?|name|pt\.?\s*name)[\s:=–-]+([A-Za-z\s.'-]{2,40})/i);
+    if (nameMatch && nameMatch[1]) {
+      extractedName = nameMatch[1].trim();
+    } else if (cleanFileName && cleanFileName.length > 2) {
+      extractedName = cleanFileName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    // Heuristic age
+    let extractedAge = '';
+    const ageMatch = fileContent.match(/(?:age|years?\s*old|y[\/.]?o)[\s:=–-]*([0-9]{1,3})/i) ||
+                     fileContent.match(/\b([0-9]{1,3})\s*(?:years?\s*old|y[\/.]?o|yrs?\s*old)\b/i);
+    if (ageMatch && ageMatch[1]) {
+      extractedAge = Number(ageMatch[1]);
+    }
+
+    // Heuristic phone
+    let extractedPhone = '+91 ';
+    const phoneMatch = fileContent.match(/(?:phone|contact|mobile|tel)[\s:=–-]*([+\d\s()-]{8,18})/i) ||
+                       fileContent.match(/(?:\+?91[\s-]?)?[6-9]\d{9}/);
+    if (phoneMatch && phoneMatch[0]) {
+      extractedPhone = phoneMatch[0].trim();
+    }
+
+    // Heuristic diagnosis
+    let extractedDx = '';
+    const dxMatch = fileContent.match(/(?:diagnosis|dx|condition|impression|assessment)[\s:=–-]+([^\n\r;]{3,80})/i);
+    if (dxMatch && dxMatch[1]) {
+      extractedDx = dxMatch[1].trim();
+    } else if (maxScore > 0) {
+      extractedDx = `${detectedDept} recovery condition`;
+    }
+
+    // Heuristic medications
+    let extractedMeds = '';
+    const medsMatch = fileContent.match(/(?:medications?|medicines?|rx|prescriptions?)[\s:=–-]+([^\n\r]{3,100})/i);
+    if (medsMatch && medsMatch[1]) {
+      extractedMeds = medsMatch[1].trim();
+    }
+
+    // Heuristic history
+    let extractedHist = '';
+    const histMatch = fileContent.match(/(?:medical\s*history|past\s*history|pmhx?|history)[\s:=–-]+([^\n\r]{3,100})/i);
+    if (histMatch && histMatch[1]) {
+      extractedHist = histMatch[1].trim();
+    }
+
+    // Heuristic risk factors
+    let extractedRisk = '';
+    const riskMatch = fileContent.match(/(?:risk\s*factors?|risks?|comorbidities|alerts?)[\s:=–-]+([^\n\r]{3,100})/i);
+    if (riskMatch && riskMatch[1]) {
+      extractedRisk = riskMatch[1].trim();
+    }
+
+    // Clinical status flag based on clinical keywords
+    let status = 'green';
+    if (text.includes('critical') || text.includes('severe') || text.includes('unstable') || text.includes('acute')) {
+      status = 'red';
+    } else if (text.includes('observation') || text.includes('moderate') || text.includes('monitor')) {
+      status = 'amber';
+    } else if (text.includes('follow-up') || text.includes('due') || text.includes('routine')) {
+      status = 'blue';
+    }
+
+    return {
+      name: extractedName,
+      age: extractedAge || '',
+      phone: extractedPhone,
+      dept: detectedDept,
+      dx: extractedDx,
+      status,
+      meds: extractedMeds,
+      hist: extractedHist,
+      risk: extractedRisk,
+      is_demo: true,
+      demo_note: reason
+    };
+  }
+
   return { result: 'Demo Mode executed', is_demo: true };
 }
 
@@ -89,14 +196,14 @@ export default async function handler(req, res) {
     }
   }
 
-  const { type, patient, responses, patientReply, recentMessages } = body || {};
+  const { type, patient, responses, patientReply, recentMessages, fileContent, fileName, mimeType, base64Data } = body || {};
 
   const apiKey = process.env.GEMINI_API_KEY;
   const isKeyConfigured = apiKey && apiKey !== 'your-gemini-api-key' && apiKey.length > 10;
 
   // If Gemini API is not configured, gracefully return clearly labeled Demo Mode
   if (!isKeyConfigured) {
-    const demoData = getDemoModeResponse(type, patient, patientReply, responses, 'GEMINI_API_KEY is not set');
+    const demoData = getDemoModeResponse(type, patient, patientReply, responses, 'GEMINI_API_KEY is not set', { fileContent, fileName });
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ success: true, data: demoData }));
@@ -179,6 +286,35 @@ Return your response in strict JSON format:
   "suggestions": ["Action item 1 for hospital nurse/doctor", "Action item 2", "Action item 3"],
   "disclaimer": "AI-assisted clinical summary. Requires human care team verification."
 }`;
+    } else if (type === 'parse_medical_file') {
+      prompt = `Extract all clinical and demographic patient details from this medical discharge summary or hospital file.
+File Name: ${fileName || 'Medical File'}
+Document Content:
+${fileContent || ''}
+
+Extraction Rules:
+1. "name": Extract the patient's full name from the document. If no name is mentioned, extract an appropriate name from the file name, or leave as "". NEVER invent a fictional name like "Anil Kumar".
+2. "age": Extract patient age as integer number, or null if absent.
+3. "phone": Extract patient contact/phone number if present (keep any +91 or standard format), or "".
+4. "dept": Choose exactly one matching hospital department: "Cardiology", "Pulmonology", "Orthopedics", or "Neurology".
+5. "dx": Primary discharge diagnosis or surgical procedure (e.g. "Acute Bronchitis", "Total Hip Arthroplasty", "Atrial Fibrillation", "Ischemic Stroke").
+6. "status": Initial clinical triage status: "red" (severe/acute/high risk), "amber" (observation/moderate symptoms), "blue" (follow-up due/scheduled tests), or "green" (stable/normal recovery).
+7. "meds": List of prescribed medications on discharge as a comma-separated string.
+8. "hist": Relevant medical history or comorbidities (e.g. "Type 2 diabetes, Hypertension").
+9. "risk": Clinical risk factors, lifestyle factors, or discharge alerts (e.g. "Lives alone, low salt diet, fall risk").
+
+Strictly return ONLY JSON in this format:
+{
+  "name": "...",
+  "age": 45,
+  "phone": "...",
+  "dept": "Pulmonology",
+  "dx": "...",
+  "status": "amber",
+  "meds": "...",
+  "hist": "...",
+  "risk": "..."
+}`;
     } else {
       res.statusCode = 400;
       res.setHeader('Content-Type', 'application/json');
@@ -211,7 +347,15 @@ Return your response in strict JSON format:
               },
               contents: [
                 {
-                  parts: [{ text: prompt }]
+                  parts: [
+                    ...(base64Data ? [{
+                      inlineData: {
+                        mimeType: mimeType || 'application/pdf',
+                        data: base64Data
+                      }
+                    }] : []),
+                    { text: prompt }
+                  ]
                 }
               ],
               generationConfig: {
@@ -236,7 +380,7 @@ Return your response in strict JSON format:
     // If Gemini API fails (quota or model failure), gracefully fall back to Demo Mode
     if (!data) {
       console.warn('Gemini API call failed, falling back to Demo Mode:', lastError);
-      const fallbackData = getDemoModeResponse(type, patient, patientReply, responses, 'Gemini API call failed, used demo mode');
+      const fallbackData = getDemoModeResponse(type, patient, patientReply, responses, 'Gemini API call failed, used demo mode', { fileContent, fileName });
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ success: true, data: fallbackData }));
@@ -257,7 +401,7 @@ Return your response in strict JSON format:
   } catch (err) {
     // Ultimate fallback to Demo Mode if unexpected exception occurs
     console.error('Server error in gemini handler, using demo fallback:', err);
-    const fallbackData = getDemoModeResponse(type, patient, patientReply, responses, err.message);
+    const fallbackData = getDemoModeResponse(type, patient, patientReply, responses, err.message, { fileContent, fileName });
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ success: true, data: fallbackData }));
