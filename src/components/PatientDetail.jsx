@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getPatientStatus, STATUS_CONFIG, STATUS_LIST } from '../data/mockPatients';
-import { sendChatMessage } from '../lib/supabase';
+import { sendChatMessage, getChatMessages, subscribeToChatUpdates } from '../lib/supabase';
 
 export default function PatientDetail({
   patient,
@@ -19,6 +19,38 @@ export default function PatientDetail({
   const [showHist, setShowHist] = useState(false);
   const [customQuestion, setCustomQuestion] = useState('');
   const [selectedOptions, setSelectedOptions] = useState([]);
+  const [liveChats, setLiveChats] = useState([]);
+
+  const reloadChats = useCallback(async () => {
+    if (!patient?.id) return;
+    try {
+      const msgs = await getChatMessages(patient.id);
+      setLiveChats(msgs || []);
+    } catch {}
+  }, [patient?.id]);
+
+  useEffect(() => {
+    reloadChats();
+  }, [reloadChats]);
+
+  // Real-time synchronization
+  useEffect(() => {
+    if (!patient?.id) return;
+    const unsubscribe = subscribeToChatUpdates((data) => {
+      if (!data?.patientId || String(data.patientId) === String(patient.id)) {
+        reloadChats();
+      }
+    });
+
+    const timer = setInterval(() => {
+      reloadChats();
+    }, 2500);
+
+    return () => {
+      unsubscribe();
+      clearInterval(timer);
+    };
+  }, [patient?.id, reloadChats]);
 
   if (!patient) return null;
 
@@ -54,6 +86,7 @@ export default function PatientDetail({
     // 2. Also send to unified chat stream so it syncs with patient chat & admin messages
     try {
       await sendChatMessage(patient.id, 'hospital', fullText);
+      reloadChats();
     } catch (err) {
       console.warn('Failed to dispatch question to chat stream:', err);
     }
@@ -72,6 +105,17 @@ export default function PatientDetail({
     const label = STATUS_CONFIG[statusKey]?.label || statusKey;
     if (onToast) onToast(`Patient status updated to: ${label}`);
   };
+
+  const formatTime = (isoString) => {
+    if (!isoString) return '';
+    try {
+      return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  };
+
+  const recentChats = liveChats.slice(-4);
 
   return (
     <div>
@@ -139,6 +183,7 @@ export default function PatientDetail({
       <div className="grid2">
         {/* Left Column */}
         <div>
+          {/* Today's Follow-up Questions Card */}
           <div className="card">
             <h2>Today's follow-up</h2>
             {(patient.today || []).map((t, idx) => (
@@ -183,6 +228,56 @@ export default function PatientDetail({
                 )}
               </div>
             )}
+          </div>
+
+          {/* Live Recent Chat Feed Card */}
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h2 style={{ margin: 0 }}>Live Recovery Chat Feed</h2>
+              <span className="live-badge">
+                <span className="live-pulse"></span> Live Synced
+              </span>
+            </div>
+            <p style={{ color: 'var(--mute)', fontSize: '13.5px', marginBottom: '12px' }}>
+              Real-time message stream between {patient.name} and the care team.
+            </p>
+
+            {recentChats.length === 0 ? (
+              <p style={{ color: 'var(--mute)', fontSize: '14px', fontStyle: 'italic' }}>
+                No recent chat messages exchanged yet.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+                {recentChats.map((m, i) => {
+                  const isPt = m.sender === 'patient';
+                  const isAI = m.sender === 'ai';
+                  return (
+                    <div
+                      key={m.id || i}
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: '14px',
+                        background: isPt ? 'var(--blue-bg)' : isAI ? 'var(--amber-bg)' : 'var(--emerald-bg)',
+                        border: `1px solid ${isPt ? 'var(--blue-border)' : isAI ? 'var(--amber-border)' : 'var(--emerald-border)'}`,
+                        fontSize: '14px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700, marginBottom: '3px' }}>
+                        <span>
+                          {isPt ? `👤 ${patient.name}` : isAI ? '✨ CareAfter AI' : '🏥 Hospital Staff'}
+                        </span>
+                        <span style={{ color: 'var(--mute)' }}>{formatTime(m.created_at)}</span>
+                      </div>
+                      <div>{m.text}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <button className="btn ghost sm full" onClick={onOpenMessages}>
+              💬 Open Full Chat Conversation Stream →
+            </button>
           </div>
 
           {/* 4-Tier Clinical Status Card */}

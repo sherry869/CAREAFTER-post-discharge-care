@@ -21,10 +21,10 @@ import {
 } from './lib/supabase';
 
 export default function App() {
-  // Session persistence across page reloads & browser refresh
+  // Session persistence across page reloads & browser refresh (using sessionStorage so multiple tabs don't conflict)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('careafter_user_session');
+      const saved = sessionStorage.getItem('careafter_user_session');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -36,7 +36,7 @@ export default function App() {
 
   const [view, setView] = useState(() => {
     try {
-      return localStorage.getItem('careafter_view') || 'dash';
+      return sessionStorage.getItem('careafter_view') || 'dash';
     } catch {
       return 'dash';
     }
@@ -44,7 +44,7 @@ export default function App() {
 
   const [selectedPatientId, setSelectedPatientId] = useState(() => {
     try {
-      const saved = localStorage.getItem('careafter_selected_patient_id');
+      const saved = sessionStorage.getItem('careafter_selected_patient_id');
       return saved ? (isNaN(Number(saved)) ? saved : Number(saved)) : null;
     } catch {
       return null;
@@ -64,28 +64,28 @@ export default function App() {
   // Toast
   const [toastMessage, setToastMessage] = useState('');
 
-  // Persist auth session on change
+  // Persist auth session on change per tab
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('careafter_user_session', JSON.stringify(currentUser));
+      sessionStorage.setItem('careafter_user_session', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('careafter_user_session');
+      sessionStorage.removeItem('careafter_user_session');
     }
   }, [currentUser]);
 
-  // Persist current view on change
+  // Persist current view on change per tab
   useEffect(() => {
-    localStorage.setItem('careafter_view', view);
+    sessionStorage.setItem('careafter_view', view);
   }, [view]);
 
-  // Persist selected patient on change
+  // Persist selected patient on change per tab
   useEffect(() => {
     if (selectedPatientId) {
-      localStorage.setItem('careafter_selected_patient_id', String(selectedPatientId));
+      sessionStorage.setItem('careafter_selected_patient_id', String(selectedPatientId));
     }
   }, [selectedPatientId]);
 
-  // Initial Data Load
+  // Initial Data Load & recurring background refresh for patient records
   useEffect(() => {
     async function init() {
       setLoading(true);
@@ -97,6 +97,16 @@ export default function App() {
       setLoading(false);
     }
     init();
+
+    // Auto refresh patient records every 4 seconds to sync replies across tabs & devices
+    const interval = setInterval(async () => {
+      const data = await getPatients();
+      if (data && data.length > 0) {
+        setPatients(data);
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const showToast = (msg) => {
@@ -190,7 +200,6 @@ export default function App() {
         onLogin={(user) => {
           setCurrentUser(user);
           if (user.role === 'patient') {
-            // Patient view defaults to chat
             setSelectedPatientId(user.patient.id);
           }
         }}
@@ -199,7 +208,7 @@ export default function App() {
     );
   }
 
-  // 2. Patient Experience — Clean, mobile-friendly chat screen ONLY with persistent session
+  // 2. Patient Experience — Clean, mobile-friendly chat screen ONLY with persistent per-tab session
   if (currentUser.role === 'patient') {
     return (
       <>

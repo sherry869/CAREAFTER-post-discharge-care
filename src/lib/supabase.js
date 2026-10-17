@@ -129,7 +129,7 @@ function getLocalChats(patientId, allowSeed = true) {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     } catch {
       // Fallback
     }
@@ -402,6 +402,54 @@ export async function addQuestion(patientId, questionText) {
   return updated;
 }
 
+// Automatically update patient follow-up answer when patient replies in chat
+export async function answerPatientQuestion(patientId, answerText) {
+  if (!patientId || !answerText) return;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      // Find today's latest question with null reply
+      const { data: questions } = await supabase
+        .from('follow_up_questions')
+        .select('id')
+        .eq('patient_id', patientId)
+        .eq('is_today', true)
+        .is('reply_text', null)
+        .order('id', { ascending: false })
+        .limit(1);
+
+      if (questions && questions.length > 0) {
+        await supabase
+          .from('follow_up_questions')
+          .update({ reply_text: answerText })
+          .eq('id', questions[0].id);
+      }
+    } catch (err) {
+      console.warn('Supabase answer question failed:', err);
+    }
+  }
+
+  // Update local patient store
+  const current = getLocalPatients();
+  let changed = false;
+  const updated = current.map(p => {
+    if (String(p.id) === String(patientId) && p.today && p.today.length > 0) {
+      const unansweredIdx = p.today.findIndex(q => !q.a || q.a === 'Waiting for reply');
+      if (unansweredIdx !== -1) {
+        const newToday = [...p.today];
+        newToday[unansweredIdx] = { ...newToday[unansweredIdx], a: answerText };
+        changed = true;
+        return { ...p, today: newToday };
+      }
+    }
+    return p;
+  });
+
+  if (changed) {
+    saveLocalPatients(updated);
+  }
+}
+
 // ==========================================
 // WhatsApp Simulator & Live Chat Messages Service
 // ==========================================
@@ -411,6 +459,9 @@ export async function getChatMessages(patientId) {
   const pId = String(patientId);
   const pIdNum = Number(patientId);
 
+  let remoteMessages = [];
+
+  // 1. If Supabase is configured with a real URL, query Supabase
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase
@@ -419,24 +470,55 @@ export async function getChatMessages(patientId) {
         .eq('patient_id', isNaN(pIdNum) ? pId : pIdNum)
         .order('created_at', { ascending: true });
 
-      if (!error && Array.isArray(data)) {
-        if (data.length > 0) {
-          saveLocalChats(patientId, data);
-          return data;
-        }
-        // If Supabase returned empty array, check if we have newly sent local messages
-        const local = getLocalChats(patientId, false);
-        if (local && local.length > 0) {
-          return local;
-        }
-        return [];
+      if (!error && Array.isArray(data) && data.length > 0) {
+        remoteMessages = data;
       }
     } catch (err) {
-      console.warn('Supabase get chats failed, using local store:', err);
+      console.warn('Supabase get chats failed:', err);
     }
   }
 
-  return getLocalChats(patientId, true);
+  // 2. Query shared central API route /api/chats (enables sync across phone, laptop, and all browsers)
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch(`/api/chats?patientId=${pId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          // If remote had no messages, use server API messages
+          if (remoteMessages.length === 0) {
+            remoteMessages = json.data;
+          } else {
+            // Merge deduplicated
+            json.data.forEach(item => {
+              if (!remoteMessages.some(rm => rm.id === item.id || (rm.text === item.text && rm.sender === item.sender))) {
+                remoteMessages.push(item);
+              }
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // Offline fallback
+    }
+  }
+
+  // 3. Merge with local storage cache (deduplicate)
+  const local = getLocalChats(patientId, true);
+  const combined = [...local];
+  remoteMessages.forEach(rm => {
+    const exists = combined.some(lm =>
+      String(lm.id) === String(rm.id) ||
+      (lm.sender === rm.sender && lm.text === rm.text && Math.abs(new Date(lm.created_at || 0) - new Date(rm.created_at || 0)) < 4000)
+    );
+    if (!exists) {
+      combined.push(rm);
+    }
+  });
+
+  combined.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+  saveLocalChats(patientId, combined);
+  return combined;
 }
 
 export async function sendChatMessage(patientId, sender, text, meta = {}) {
@@ -447,7 +529,7 @@ export async function sendChatMessage(patientId, sender, text, meta = {}) {
   const newMsg = {
     patient_id: validPatientId,
     sender,
-    text,
+    text: String(text).trim(),
     is_concerning: Boolean(meta.is_concerning),
     concern_reason: meta.concern_reason || null,
     is_demo: Boolean(meta.is_demo),
@@ -455,16 +537,27 @@ export async function sendChatMessage(patientId, sender, text, meta = {}) {
     created_at: new Date().toISOString()
   };
 
-  // 1. Immediately save to LocalStorage cache so it is instant and survives reloads
+  // 1. Immediately save to LocalStorage cache so it is instant
   const current = getLocalChats(patientId, false);
   const localMsg = { ...newMsg, id: Date.now() };
   const updated = [...current, localMsg];
   saveLocalChats(patientId, updated);
 
-  // 2. Broadcast immediately to any other active tabs/components
+  // 2. Broadcast immediately to any other active tabs/components in same browser
   notifyChatUpdate(patientId, localMsg);
 
-  // 3. If Supabase is connected, sync to remote database
+  // 3. Post to central server API /api/chats (enables sync to phones, other browsers, and tabs)
+  if (typeof window !== 'undefined') {
+    try {
+      fetch('/api/chats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMsg)
+      }).catch(() => {});
+    } catch {}
+  }
+
+  // 4. If Supabase is connected with real URL, sync to remote database
   if (isSupabaseConfigured && supabase) {
     try {
       let { data, error } = await supabase
@@ -473,13 +566,12 @@ export async function sendChatMessage(patientId, sender, text, meta = {}) {
         .select()
         .single();
 
-      // If insert failed (e.g. table schema in Supabase lacks extra columns), retry with base columns
       if (error) {
         console.warn('Full chat_messages insert failed, retrying base schema:', error);
         const baseMsg = {
           patient_id: validPatientId,
           sender,
-          text,
+          text: newMsg.text,
           status: 'delivered',
           created_at: newMsg.created_at
         };
@@ -511,6 +603,11 @@ export async function sendChatMessage(patientId, sender, text, meta = {}) {
 }
 
 export async function processPatientReplyAI(patient, text, recentMessages = []) {
+  // Update patient's daily answer in record if pending
+  try {
+    await answerPatientQuestion(patient.id, text);
+  } catch {}
+
   try {
     const res = await fetch('/api/gemini', {
       method: 'POST',
