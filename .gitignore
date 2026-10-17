@@ -30,3 +30,6 @@ dist-ssr
 
 # Reference files
 CareAfter_reference.html
+
+# Local server dev cache
+src/data/server_chats.json
